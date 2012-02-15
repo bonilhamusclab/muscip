@@ -1,0 +1,5 @@
+*.pyc
+.externalToolBuilders/*
+.project
+.pydevproject
+.settings/*
