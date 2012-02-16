@@ -20,7 +20,6 @@ class Test_TNImages(unittest.TestCase):
         # tests/data/images, we should be able to load
         self._i.load_from_dir(SUPPORT_DIR)
         assert self._i.get_images() is not None
-        assert len(self._i.get_images()) == 3
 
     def test_does_not_choke_on_non_image_file(self):
         error = False
@@ -29,13 +28,73 @@ class Test_TNImages(unittest.TestCase):
         except:
             error = True
         assert not error
-        assert len(self._i.get_images()) == 3
 
     def test_images_are_tn_images(self):
         self._i.load_from_dir(SUPPORT_DIR)
         test_img = self._i.get_images()[0]
         assert type(test_img) is images.TNImage
 
+    def test_can_get_mean_delta_z_dz(self):
+        from os.path import join
+        self._i.load_from_dir(join(SUPPORT_DIR,'4dim_images'))
+        assert self._i.mean_delta_z_dz() is not None
+
+    def test_mean_delta_z_dz_is_expected_shape(self):
+        from os.path import join
+        self._i.load_from_dir(join(SUPPORT_DIR,'4dim_images'))
+        result = self._i.mean_delta_z_dz()
+        assert result.shape == (10,10)
+
+    def test_mean_delta_z_dz_3_dim(self):
+        from os.path import join
+        self._i.load_from_dir(join(SUPPORT_DIR,'3dim_images'))
+        result = self._i.mean_delta_z_dz()
+        assert result.shape == (10,)
+
+    def test_can_get_mean_delta_z_dv(self):
+        from os.path import join
+        self._i.load_from_dir(join(SUPPORT_DIR,'4dim_images'))
+        assert self._i.mean_delta_z_dv() is not None
+
+    def test_mean_delta_z_dv_is_expected_shape(self):
+        from os.path import join
+        self._i.load_from_dir(join(SUPPORT_DIR,'4dim_images'))
+        result = self._i.mean_delta_z_dv()
+        assert result.shape == (10,10)
+
+    def test_can_load_from_directory_with_subjects_and_b_files(self):
+        from os.path import join
+        basepath = join(SUPPORT_DIR,'subject_dir')
+        from os import listdir
+        subjects = listdir(basepath)
+        self._i.load_from_dir(basepath, subject_dirs = subjects,
+                              image_filename = 'rdata.nii.gz',
+                              bvals_filename = 'bvals',
+                              bvecs_filename = 'bvecs')
+        # get the images we found
+        images = None
+        try:
+            images = self._i.get_images()
+        except Exception as e:
+            print e
+        # make sure we got something back
+        assert images is not None
+        assert len(images) >= 1
+
+    def test_can_load_from_directory_with_params_and_get_num_of_b_zeros(self):
+        from os.path import join
+        basepath = join(SUPPORT_DIR,'subject_dir')
+        from os import listdir
+        subjects = listdir(basepath)
+        self._i.load_from_dir(basepath, subject_dirs = subjects,
+                              image_filename = 'rdata.nii.gz',
+                              bvals_filename = 'bvals',
+                              bvecs_filename = 'bvecs')
+        # each of these images should have 2 bvals
+        for image in self._i.get_images():
+            assert image.number_of_b_zeros() == 2
+
+            
 class Test_TNImage(unittest.TestCase):
 
     def setUp(self):
@@ -51,23 +110,33 @@ class Test_TNImage(unittest.TestCase):
         from os.path import join
         assert images.TNImage(join(SUPPORT_DIR,'noise.nii.gz')) is not None
 
-    def test_can_get_dz(self):
+    def test_can_get_delta_z_dz(self):
         from os.path import join
         my_image = images.TNImage(join(SUPPORT_DIR,'one.nii.gz'))
-        assert (my_image.dz() == 0).all()
+        assert (my_image.delta_z_dz() == 0).all()
 
-    def test_dz_is_accurate(self):
+    def test_can_get_delta_z_dz_for_3dim(self):
+        from os.path import join
+        my_image = images.TNImage(join(SUPPORT_DIR,'3dim_images/3dim.nii.gz'))
+        assert my_image.delta_z_dz() is not None
+        
+    def test_delta_z_dz_is_accurate(self):
         from os.path import join
         test_img = join(SUPPORT_DIR,'noise.nii.gz')
         my_obj = images.TNImage(filename=test_img)
         mean_z = my_obj.z_mean()
-        dz = my_obj.dz()
-        assert (mean_z[1,:] - mean_z[0,:] == dz[1,:]).all()
-        assert (mean_z[0,:] - mean_z[-1,:] == dz[0,:]).all()
+        delta_z_dz = my_obj.delta_z_dz()
+        assert (mean_z[1,:] - mean_z[0,:] == delta_z_dz[1,:]).all()
+        assert (mean_z[0,:] - mean_z[-1,:] == delta_z_dz[0,:]).all()
 
     def test_can_get_z_mean(self):
         from os.path import join
         my_image = images.TNImage(join(SUPPORT_DIR,'one.nii.gz'))
+        assert my_image.z_mean() is not None
+
+    def test_can_get_z_mean_for_3dim(self):
+        from os.path import join
+        my_image = images.TNImage(join(SUPPORT_DIR,'3dim_images/3dim.nii.gz'))
         assert my_image.z_mean() is not None
 
     def test_z_mean_is_accurate(self):
@@ -79,3 +148,55 @@ class Test_TNImage(unittest.TestCase):
         data = load(test_img).get_data()
         flat = data[:,:,0,0].ravel()
         assert np.mean(flat) == my_obj.z_mean()[0][0]
+
+    def test_can_get_v_mean(self):
+        from os.path import join
+        my_image = images.TNImage(join(SUPPORT_DIR,'one.nii.gz'))
+        assert my_image.v_mean() is not None
+
+    def test_v_mean_is_accurate(self):
+        from nibabel import load
+        from os.path import join
+        import numpy as np
+        test_img = join(SUPPORT_DIR,'noise.nii.gz')
+        my_obj = images.TNImage(filename=test_img)
+        data = load(test_img).get_data()
+        flat = data[:,:,:,0].ravel()
+        assert np.mean(flat) == my_obj.v_mean()[0]
+    
+    def test_can_get_delta_z_dv(self):
+        from os.path import join
+        my_image = images.TNImage(join(SUPPORT_DIR,'one.nii.gz'))
+        assert my_image.delta_z_dv() is not None
+
+    def test_delta_z_dv_is_accurate(self):
+        from os.path import join
+        test_img = join(SUPPORT_DIR,'noise.nii.gz')
+        my_obj = images.TNImage(filename=test_img)
+        mean_z = my_obj.z_mean()
+        delta_z_dv = my_obj.delta_z_dv()
+        assert (mean_z[:,1] - mean_z[:,0] == delta_z_dv[:,1]).all()
+        assert (mean_z[:,0] - mean_z[:,-1] == delta_z_dv[:,0]).all()
+        
+    def test_can_set_number_of_b_zeros(self):
+        my_obj = images.TNImage()
+        my_obj.number_of_b_zeros = 5
+        assert my_obj.number_of_b_zeros == 5
+
+    def test_access_number_of_b_zeros_without_set_no_error(self):
+        my_obj = images.TNImage()
+        error = False
+        try:
+            my_obj.number_of_b_zeros()
+        except Exception as e:
+            print e
+            error = True
+        assert not error
+
+    def test_can_get_number_of_b_zeros(self):
+        subject_dir = 'test_data/images/subject_dir/SUB_0001/'
+        my_obj = images.TNImage(filename = subject_dir + 'rdata.nii.gz',
+                                bvecs_file = subject_dir + 'bvecs',
+                                bvals_file = subject_dir + 'bvals')
+        # this particular subject has 2 b0's
+        assert my_obj.number_of_b_zeros() == 2
