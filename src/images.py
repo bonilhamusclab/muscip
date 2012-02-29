@@ -20,13 +20,53 @@ class TNImages(object):
         from os import listdir
         from os.path import join
         theFiles = list()
-        
-        theFiles = listdir(theDirectory)
-        for theFile in theFiles:
-            try:
-                self._images.append(TNImage(filename=join(theDirectory,theFile)))
-            except:
-                continue
+        if subject_dirs is None:
+            theFiles = listdir(theDirectory)
+            for theFile in theFiles:
+                try:
+                    myBval = None
+                    if bvals_filename is not None:
+                        myBval = join(theDirectory,bvals_filename)
+                    myBvec = None
+                    if bvecs_filename is not None:
+                        myBvec = join(theDirectory,bvecs_filename)
+                    self._images.append(TNImage(filename=join(theDirectory,theFile),
+                                                bvals_file=myBval,
+                                                bvecs_file=myBvec))
+                except:
+                    continue
+        elif subject_dirs is not None:
+            for sdir in subject_dirs:
+                target = join(theDirectory,sdir)
+                if image_filename is not None:
+                    try:
+                        myFilename = join(target,image_filename)
+                        myBval = None
+                        if bvals_filename is not None:
+                            myBval = join(target,bvals_filename)
+                        myBvec = None
+                        if bvecs_filename is not None:
+                            myBvec = join(target,bvecs_filename)
+                        self._images.append(TNImage(filename=myFilename,
+                                                    bvals_file=myBval,
+                                                    bvecs_file=myBvec))
+                    except:
+                        pass
+                else:
+                    for theFile in listdir(target):
+                        try:
+                            myFilename = join(target,theFile)
+                            myBval = None
+                            if bvals_filename is not None:
+                                myBval = join(target,bvals_filename)
+                            myBvec = None
+                            if bvecs_filename is not None:
+                                myBvec = join(target,bvecs_filename)
+                            self._images.append(TNImage(filename=myFilename,
+                                                        bvals_file=myBval,
+                                                        bvecs_file=myBvec))
+                        except:
+                            pass
 
     def mean_delta_z_dv(self):
         expected_shape = None
@@ -217,4 +257,69 @@ class TNImage(object):
         outshape = newshape[:-1]
         return reshaped.mean(axis=-1).reshape(outshape)
 
-        
+# module level functions
+def get_wm_neighbors(ROI_img, WM_img):
+    ROI_data = ROI_img._base.get_data()
+    WM_data = WM_img._base.get_data()
+    result = dict()
+    for idx, value in np.ndenumerate(ROI_data):
+        if value == 0:
+            continue
+        elif voxel_has_neighbor_with_value(WM_data, np.asarray(idx), 1):
+            if value not in result:
+                result[value] = 1
+            else:
+                result[value] += 1
+    return result
+    
+def get_wm_neighbors_for_value(ROI_img, WM_img, value):
+    """Return the indices of all voxels in the ROI with the given
+    value, which are adjacent to a white matter voxel (a voxel with a
+    value of 1 in the WM image)
+
+    ROI image and WM image must be of equal shape
+    """
+    assert ROI_img._base.shape == WM_img._base.shape
+    ROI_data = ROI_img._base.get_data()
+    WM_data = WM_img._base.get_data()
+    results = list()
+    test_idxs = np.argwhere(ROI_data==value)
+    for idx in test_idxs:
+        if voxel_has_neighbor_with_value(WM_data, idx, 1):
+            results.append(idx)
+    return results
+
+def voxel_has_neighbor_with_value(test_img_data, voxel_idx, target_value):
+    search_space = [-1,0,1]
+    me = tuple(voxel_idx)
+    x0 = voxel_idx[0]
+    y0 = voxel_idx[1]
+    z0 = voxel_idx[2]
+    for dx in search_space:
+        for dy in search_space:
+            for dz in search_space:
+                test_idx = tuple([x0+dx, y0+dy, z0+dz])
+                # if test_idx is equal to original, let's move on to
+                # the next
+                if test_idx == me:
+                    continue
+                # if any of our xyz coordinates (for test idx) are
+                # negative, let's move on to the next (this would mean
+                # we are wrapping around a dimension, like pac-man
+                # when he goes through one side of the screen and ends
+                # up on the opposite)
+                if -1 in test_idx:
+                    continue
+                # if we've made it here we are ready to test for the
+                # target value for this particular voxel
+                try: # use try to handle indexing errors (our algo
+                     # will search beyond the max index for edge
+                     # cases)
+                    if test_img_data[test_idx] == target_value:
+                        return True # we return true and exit as soon as
+                except:
+                    pass # nothing to do, this is normal for edge cases
+    # any match is found if we made it through the previous loop, then
+    # we did not find a match
+    return False
+            

@@ -200,3 +200,24 @@ class Test_TNImage(unittest.TestCase):
                                 bvals_file = subject_dir + 'bvals')
         # this particular subject has 2 b0's
         assert my_obj.number_of_b_zeros() == 2
+
+    def test_can_get_wm_neighbors_for_value(self):
+        # for a test we will provide a 3dim white-matter mask with one
+        # zero value in the xyz-center of the cube...  this
+        # configuration should yield 26 neighbors (entire cube
+        # centered around center voxel, less the voxel itself).  The
+        # ROI image will consist of all ones, being of the same shape
+        # as the mask.
+        roiImage = images.TNImage(filename = 'test_data/images/3dim_images/ones.nii.gz')
+        maskImage = images.TNImage(filename = 'test_data/images/3dim_images/wm_mask_only_center.nii.gz')
+        assert len(images.get_wm_neighbors_for_value(roiImage,maskImage,1)) == 26
+
+    def test_can_get_wm_neighbors(self):
+        # use the assumptions of the wm_neighbors_for_value test but
+        # return the results in a plural context, even though these
+        # test data will only yield one value
+        roiImage = images.TNImage(filename = 'test_data/images/3dim_images/ones.nii.gz')
+        maskImage = images.TNImage(filename = 'test_data/images/3dim_images/wm_mask_only_center.nii.gz')
+        result = images.get_wm_neighbors(roiImage, maskImage)
+        assert len(result) == 1
+        assert result[1] == 26
