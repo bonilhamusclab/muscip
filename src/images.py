@@ -199,6 +199,13 @@ class TNImage(object):
         # return the difference
         return z0 - z1
 
+    def get_data(self):
+        """Pass this call up to nibabel and return the data as
+        expected from nibabel
+
+        """
+        return self._base.get_data()
+        
     def number_of_b_zeros(self):
         """Return the number of b zeros if applicable, else return
         None
@@ -258,20 +265,6 @@ class TNImage(object):
         return reshaped.mean(axis=-1).reshape(outshape)
 
 # module level functions
-def get_wm_neighbors(ROI_img, WM_img):
-    ROI_data = ROI_img._base.get_data()
-    WM_data = WM_img._base.get_data()
-    result = dict()
-    for idx, value in np.ndenumerate(ROI_data):
-        if value == 0:
-            continue
-        elif voxel_has_neighbor_with_value(WM_data, np.asarray(idx), 1):
-            if value not in result:
-                result[value] = 1
-            else:
-                result[value] += 1
-    return result
-    
 def get_wm_neighbors_for_value(ROI_img, WM_img, value):
     """Return the indices of all voxels in the ROI with the given
     value, which are adjacent to a white matter voxel (a voxel with a
@@ -322,4 +315,29 @@ def voxel_has_neighbor_with_value(test_img_data, voxel_idx, target_value):
     # any match is found if we made it through the previous loop, then
     # we did not find a match
     return False
-            
+
+def surface_area_for_rois(roiImage, maskImage):
+    """Return an array where arr[idx] contains the count of voxels
+    belonging to ROI.label == idx, that have a white matter neighbor
+    as per the mask image.
+
+    roiImage - nibabel image of ROI where voxel values represent label
+    of ROI
+
+    maskImage - nibabel image of white matter where white matter
+    voxels have values of 1 and non white matter voxels have value of
+    zero
+
+    """
+    ROI_data = roiImage.get_data()
+    WM_data = maskImage.get_data()
+    result = dict()
+    for idx, value in np.ndenumerate(ROI_data):
+        if value == 0:
+            continue
+        elif voxel_has_neighbor_with_value(WM_data, np.asarray(idx), 1):
+            if value not in result:
+                result[value] = 1
+            else:
+                result[value] += 1
+    return result    
