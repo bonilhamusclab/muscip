@@ -213,8 +213,12 @@ class Test_TNImage(unittest.TestCase):
         assert len(images.get_wm_neighbors_for_value(roiImage,maskImage,1)) == 26
 
     def test_can_get_surface_areas(self):
-        roiImage = images.TNImage(filename = 'test_data/images/3dim_images/ones.nii.gz')
-        maskImage = images.TNImage(filename = 'test_data/images/3dim_images/wm_mask_only_center.nii.gz')
+        # the following compares images and test images that are known
+        # to satisfy the condition that an ROI w/ label n will have n
+        # voxels that border white matter... labels in these images
+        # are defined for 1:10
+        roiImage = images.TNImage(filename = 'test_data/images/ROI_50x50x50.nii.gz')
+        maskImage = images.TNImage(filename = 'test_data/images/ROI_WM_MASK_50x50x50.nii.gz')
         result = images.surface_area_for_rois(roiImage, maskImage)
-        assert len(result) == 1
-        assert result[1] == 26
+        for label in range(1,11): # 1:10
+            assert result[label] == label
