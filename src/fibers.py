@@ -15,7 +15,8 @@ class TNFibers(object):
         self._load_alternative_spacings()
         
     def get_data(self):
-        return self.data
+        if self.format == 'trackvis':
+            return self.data
 
     def get_dim(self):
         if self.format == 'trackvis':
@@ -25,10 +26,6 @@ class TNFibers(object):
     def get_header(self):
         return self.header
         
-    def get_data(self):
-        if self.format == 'trackvis':
-            return self.data
-
     def get_spacing(self):
         return self._spacing
         
@@ -106,6 +103,27 @@ class TNFibers(object):
 # Module Level Functions -------------------------------------------------------
 ################################################################################
 
+def extract_hagmann_density(connectome, roi_img, wm_img):
+    """Populate hagmann density for given connectome"""
+    
+    def inverse_sum(elements):
+        inverse_elements = []
+        for element in elements:
+            inverse_elements.append( 1.0 / element )
+        from math import fsum
+        return fsum(inverse_elements)
+
+    # get surface areas for ROIs
+    import images
+    surface_area = images.surface_area_for_rois(roi_img, wm_img)
+
+    # for every edge...
+    for i,j in connectome.edges_iter():
+        calc_hd = ( ( 2.0 / ( surface_area[i] + surface_area[j] ) ) * \
+                  inverse_sum( connectome[i][j]['streamlines_length'] ) )
+        connectome[i][j]['hagmann_density'] = calc_hd
+    
+    
 def extract_scalars(fibers, connectome, scalar_img, scalar_name, scale_factor=[1.,1.,1.]):
     """Extract scalar values for given fiber, img combination, and add
     to connectome.
@@ -127,6 +145,10 @@ def extract_scalars(fibers, connectome, scalar_img, scalar_name, scale_factor=[1
     # generate out keys
     mean_key = "%s_mean" % scalar_name
     std_key = "%s_std" % scalar_name
+
+    # record image path in connectome
+    from os.path import abspath
+    connectome.graph['%s_img' % scalar_name] = abspath(scalar_img.get_filename())
 
     # get streamlines
     streamlines = fibers.get_data()
@@ -162,6 +184,8 @@ def generate_connectome(fibers, roi_img):
     import networkx
     # create empty graph
     connectome = networkx.Graph()
+    from os.path import abspath
+    connectome.graph['roi_img'] = abspath(roi_img.get_filename())
     # get our ROI data
     roi_data = roi_img.get_data()
     # get our vertex key
@@ -197,15 +221,43 @@ def generate_connectome(fibers, roi_img):
             try:
                 connectome[label_i][label_j]['number_of_fibers'] += 1
                 connectome[label_i][label_j]['streamlines'].append(streamline)
+                connectome[label_i][label_j]['streamlines_length'].append(
+                    length_of_streamline(streamlines[streamline]))
             # handle the case where the edge does not yet exist
             except KeyError:
                 connectome.add_edge(label_i, label_j)
                 connectome[label_i][label_j]['number_of_fibers'] = 1
                 connectome[label_i][label_j]['streamlines'] = [streamline]
+                connectome[label_i][label_j]['streamlines_length'] = [length_of_streamline(streamlines[streamline])]
+
+    # calculate and store mean fiber lengths and std
+    import numpy
+    for i,j in connectome.edges_iter():
+        connectome[i][j]['fiber_length_mean'] = numpy.asarray(connectome[i][j]['streamlines_length']).mean()
+        connectome[i][j]['fiber_length_std'] = numpy.asarray(connectome[i][j]['streamlines_length']).std()
+
     # return our results
     return connectome
     
-    
+def length_of_streamline(streamline):
+    """Return the length of streamline as determined by it's
+    vertices
+
+    '"""
+    segments = []
+    idx = 0
+    vertices = streamline['vertices_mm']
+    while idx < len(vertices) - 1:
+        start = vertices[idx]
+        end = vertices[idx+1]
+        from math import sqrt
+        distance = sqrt( (end[0]-start[0])**2 + (end[1]-start[1])**2 + \
+                         (end[2]-start[2])**2 )
+        segments.append(distance)
+        idx += 1
+    from math import fsum
+    return fsum(segments)
+
 def read(file, format='trackvis'):
     """Load a TNFibers object from file and return"""
     accepted_formats = ['trackvis']

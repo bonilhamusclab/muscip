@@ -70,6 +70,8 @@ class Test_TNImages(unittest.TestCase):
         for i,j in my_connectome.edges_iter():
             assert my_connectome[i][j]['number_of_fibers'] == \
                    expected_connectome[i][j]['number_of_fibers']
+            assert rms(my_connectome[i][j]['fiber_length_mean'],
+                       expected_connectome[i][j]['fiber_length_mean']) < 10**-4
 
     def test_can_extract_scalars(self):
         global f_cmtk
@@ -87,6 +89,18 @@ class Test_TNImages(unittest.TestCase):
             assert rms(my_connectome[i][j]['fa_mean'],
                        expected_connectome[i][j]['fa_mean']) < 10**-4
 
+    def test_can_extract_hagmann_density(self):
+        global f_cmtk
+        f_cmtk.set_spacing('mm')
+        import nibabel
+        roi_img = nibabel.load("%s/CMTK_roi.nii.gz" % IMAGES_DIR)
+        wm_img = nibabel.load("%s/CMTK_wm_1mm.nii.gz" % IMAGES_DIR)
+        my_connectome = fibers.generate_connectome(f_cmtk, roi_img)
+        fibers.extract_hagmann_density(my_connectome, roi_img, wm_img)
+        for i,j in my_connectome.edges_iter():
+            assert my_connectome[i][j]['hagmann_density'] > 0
+
+            
 # helper functions
 def rms(value1, value2):
     from math import sqrt
