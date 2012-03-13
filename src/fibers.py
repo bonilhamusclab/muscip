@@ -11,6 +11,7 @@ class TNFibers(object):
         self.data = data
         self.format = format
         self.header = header
+        self._spacing = spacing
         self._load_alternative_spacings()
         
     def get_data(self):
@@ -28,6 +29,9 @@ class TNFibers(object):
         if self.format == 'trackvis':
             return self.data
 
+    def get_spacing(self):
+        return self._spacing
+        
     def get_voxel_size(self):
         if self.format == 'trackvis':
             if self.header is not None:
@@ -40,6 +44,18 @@ class TNFibers(object):
             except:
                 return None
 
+    def set_spacing(self, new_spacing):
+        accepted_spacing = ['mm', 'vox']
+        if new_spacing not in accepted_spacing:
+            print "%s is not an accepted spacing" % new_spacing
+        if new_spacing == 'mm':
+            if self.format == 'trackvis':
+                self._vertex_key = 'vertices_mm'
+        if new_spacing == 'vox':
+            if self.format == 'trackvis':
+                self._vertex_key = 'vertices_vox'
+        self._spacing = new_spacing
+        
     def _load_alternative_spacings(self):
         """Populate the data with both voxel and mm based spacing
         values.
@@ -84,8 +100,127 @@ class TNFibers(object):
             'hdr_size': 22
         }
                 
+
         
-# Module Level Functions
+################################################################################        
+# Module Level Functions -------------------------------------------------------
+################################################################################
+
+def extract_scalars(fibers, connectome, scalar_img, scalar_name, scale_factor=[1.,1.,1.]):
+    """Extract scalar values for given fiber, img combination, and add
+    to connectome.
+
+    Return copy of updated connectome.
+
+    """
+    import numpy # we will need this for mean, std over arrays
+
+    # get scalar img data
+    scalar_data = scalar_img.get_data()
+
+    # get vertex key
+    if fibers.get_spacing() == 'mm':
+        vertex_key = 'vertices_mm'
+    elif fibers.get_spacing() == 'vox':
+        vertex_key = 'vertices_vox'
+
+    # generate out keys
+    mean_key = "%s_mean" % scalar_name
+    std_key = "%s_std" % scalar_name
+
+    # get streamlines
+    streamlines = fibers.get_data()
+    # for every edge in our connectome...
+    for i,j in connectome.edges_iter():
+        # start a new collection
+        collected_values = []
+        # for every streamline belonging to edge...
+        for streamline in connectome[i][j]['streamlines']:
+            # for every vertex belonging to streamline
+            for vertex in streamlines[streamline][vertex_key]:
+                voxel = [int(vertex[0] / scale_factor[0]),
+                         int(vertex[1] / scale_factor[1]),
+                         int(vertex[2] / scale_factor[2])]
+                # try to get value for voxel (it is possible it is out
+                # of bounds)
+                try:
+                    value = scalar_data[tuple(voxel)]
+                except IndexError:
+                    continue
+                collected_values.append(value)
+
+        # calculate aggregate values and write to connectom
+        collected_values_as_array = numpy.asarray(collected_values)
+        connectome[i][j][mean_key] = collected_values_as_array.mean()
+        connectome[i][j][std_key] = collected_values_as_array.std()
+
+    # return updated connectome
+    return connectome
+    
+def generate_connectome(fibers, roi_img):
+    """Return connectome as a networkx object"""
+    import networkx
+    # create empty graph
+    connectome = networkx.Graph()
+    # get our ROI data
+    roi_data = roi_img.get_data()
+    # get our vertex key
+    if fibers.get_spacing() == 'mm':
+        vertex_key = 'vertices_mm'
+    elif fibers.get_spacing() == 'vox':
+        vertex_key = 'vertices_vox'
+    # TODO: should write an interater so that we don't need to load
+    # all of this into memory
+    streamlines = fibers.get_data()
+    for streamline in streamlines:
+        # get the endpoints of streamline in terms of voxel indices
+        vertex_i = streamlines[streamline][vertex_key][0]
+        vertex_j = streamlines[streamline][vertex_key][-1]
+        voxel_i = [int(vertex_i[0]), int(vertex_i[1]),
+                   int(vertex_i[2])]
+        voxel_j = [int(vertex_j[0]), int(vertex_j[1]),
+                   int(vertex_j[2])]
+        # try and get value for voxel indices from roi data (it is
+        # possible that we are outside of the bounds of the ROI, due
+        # to the propegation of the tracks beyond the bounds of ROI
+        # image in tracking)
+        try:
+            label_i = roi_data[tuple(voxel_i)]
+            label_j = roi_data[tuple(voxel_j)]
+        except IndexError:
+            continue
+        # if both endpoints reside in ROIs (both endpoints are
+        # non-zero)...
+        if label_i != 0 and label_j != 0:
+            # ...then we need to add to the fiber count for the
+            # specified edge
+            try:
+                connectome[label_i][label_j]['number_of_fibers'] += 1
+                connectome[label_i][label_j]['streamlines'].append(streamline)
+            # handle the case where the edge does not yet exist
+            except KeyError:
+                connectome.add_edge(label_i, label_j)
+                connectome[label_i][label_j]['number_of_fibers'] = 1
+                connectome[label_i][label_j]['streamlines'] = [streamline]
+    # return our results
+    return connectome
+    
+    
+def read(file, format='trackvis'):
+    """Load a TNFibers object from file and return"""
+    accepted_formats = ['trackvis']
+    if format not in accepted_formats:
+        print "%s is not an accepted format" % format
+        raise
+    if format == 'trackvis':
+        import nibabel.trackvis
+        read_data = nibabel.trackvis.read(file)
+        my_data = dict()
+        for idx, rec in enumerate(read_data[0]):
+            my_data[idx] = {'vertices_mm': rec[0]}
+        my_header = read_data[1].tolist()
+        return TNFibers(data=my_data, format='trackvis', header=my_header)
+
 def sum_of_inverse_fiber_lengths(roi_img, endpoints, lengths):
     """For a given ROI atlas and set of fibers, return an adjacency
     matrix where each component(i,j) holds the sum of inverse fiber
@@ -129,18 +264,3 @@ def sum_of_inverse_fiber_lengths(roi_img, endpoints, lengths):
             raise
     return result
 
-def read(file, format='trackvis'):
-    """Load a TNFibers object from file and return"""
-    accepted_formats = ['trackvis']
-    if format not in accepted_formats:
-        print "%s is not an accepted format" % format
-        raise
-    if format == 'trackvis':
-        import nibabel.trackvis
-        import numpy
-        read_data = nibabel.trackvis.read(file)
-        my_data = dict()
-        for idx, rec in enumerate(read_data[0]):
-            my_data[idx] = {'vertices_mm': rec[0]}
-        my_header = read_data[1].tolist()
-        return TNFibers(data=my_data, format='trackvis', header=my_header)
