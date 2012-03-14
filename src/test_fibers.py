@@ -100,7 +100,19 @@ class Test_TNImages(unittest.TestCase):
         for i,j in my_connectome.edges_iter():
             assert my_connectome[i][j]['hagmann_density'] > 0
 
-            
+    def test_can_get_cmat_for_key(self):
+        global f_cmtk
+        f_cmtk.set_spacing('mm')
+        import nibabel
+        roi_img = nibabel.load("%s/CMTK_roi.nii.gz" % IMAGES_DIR)
+        my_connectome = fibers.generate_connectome(f_cmtk, roi_img)
+        fiber_cmat = fibers.cmat_for_key(my_connectome, 'number_of_fibers')
+        for i,j in my_connectome.edges_iter():
+            expected_fibers = my_connectome[i][j]['number_of_fibers']
+            assert fiber_cmat[i-1][j-1] == expected_fibers
+            assert fiber_cmat[j-1][i-1] == expected_fibers
+
+
 # helper functions
 def rms(value1, value2):
     from math import sqrt

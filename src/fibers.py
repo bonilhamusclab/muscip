@@ -103,6 +103,41 @@ class TNFibers(object):
 # Module Level Functions -------------------------------------------------------
 ################################################################################
 
+def cmat_for_key(connectome, key, number_of_nodes=None,
+                 force_symmetric=True):
+    """Return a N x N connection matrix for given connectome and
+    key. The connection matrix is returned as a numpy ndarray.
+
+    """
+
+    # create our new shiny connection matrix
+    import numpy
+    if number_of_nodes is None:
+        n = max(connectome.nodes())
+    else:
+        n = number_of_nodes
+    new_cmat = numpy.zeros((n,n))
+
+    # extract the value for key for every edge in the given connectome
+    for i,j in connectome.edges_iter():
+        new_cmat[i-1][j-1] = connectome[i][j][key]
+        
+    # do we need to do anything regarding symmetry?
+    if force_symmetric and (new_cmat - new_cmat.T != 0).any():
+        #...if one-sided (no information below diagonal)
+        if (numpy.tril(new_cmat,-1) == 0).all():
+            # project above diagonal onto below diagonal
+            new_cmat += numpy.tril(new_cmat.T, -1)
+        #...else, we will assume two-sided unequal
+        else:
+            # our solution will be to take the mean of each pair of
+            # reflected indices
+            new_cmat = (new_cmat + new_cmat.T ) / 2.0
+
+    # return the cmat
+    return new_cmat
+        
+    
 def extract_hagmann_density(connectome, roi_img, wm_img):
     """Populate hagmann density for given connectome"""
     
