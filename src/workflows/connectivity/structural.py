@@ -1,8 +1,6 @@
 """Collection of workflows relating to structural connectivity."""
 
-import nipype.pipeline.engine as pe
-import nipype.interfaces.utility as util
-
+import os
 
 def create_default_dti_workflow(base_dir,
                                 subject_ids,
@@ -29,6 +27,9 @@ def create_default_dti_workflow(base_dir,
 
     """
 
+    import nipype.pipeline.engine as pe
+    import nipype.interfaces.utility as util
+
     # Create our workflow so we can connect as we go ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     this_workflow = pe.Workflow(name=name)
     
@@ -38,10 +39,9 @@ def create_default_dti_workflow(base_dir,
     inputnode.iterables = ('subject_id', subject_ids)
     
     import nipype.interfaces.io as nio
-    import os
+    import os.path
     datagrab = pe.Node(interface=nio.DataGrabber(infields=['subject_id'],
-                                                 outfields=['subject_id',
-                                                            'struct_image',
+                                                 outfields=['struct_image',
                                                             'dwi_image']),
                                                             name='datagrab')
     datagrab.inputs.base_directory = os.path.abspath(base_dir)    
@@ -58,6 +58,16 @@ def create_default_dti_workflow(base_dir,
     this_workflow.connect(datagrab, 'dwi_image', registration, 'inputnode.dwi_image')
     this_workflow.connect(datagrab, 'struct_image', registration, 'inputnode.structural_image')
 
+    # Segmentation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    segmentation = create_segmentation(base_dir)
+    # this_workflow.connect(
+    #     [datagrab, segmentation,
+    #      [('struct_image', 'inputnode.structural_image'),
+    #       ('subject_id', 'inputnode.subject_id')],
+    # ])
+    this_workflow.connect(datagrab, 'struct_image', segmentation, 'inputnode.structural_image')
+    this_workflow.connect(inputnode, 'subject_id', segmentation, 'inputnode.subject_id')
+    
     # Write out data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     datasink = pe.Node(nio.DataSink(parameterization=False), name='nifti-sinker')
     datasink.inputs.base_directory = os.path.abspath(base_dir)
@@ -102,7 +112,8 @@ def create_registration(name='registration'):
       outputnode.struct_to_dwi_mat
 
     """
-
+    import nipype.pipeline.engine as pe
+    import nipype.interfaces.utility as util
     import nipype.interfaces.fsl.utils as fslutil
     import nipype.interfaces.fsl.preprocess as fslpre    
     
@@ -144,3 +155,56 @@ def create_registration(name='registration'):
     this_workflow.connect(flirt, "out_matrix_file", outputnode, "struct_to_dwi_mat")    
     # Return workflow
     return this_workflow
+
+def create_segmentation(base_dir, name='segmentation'):
+    """Create a workflow designed to segment structural image.
+
+    Example
+    -------
+    >>> import tn_image_processing.workflows as pipes
+    >>> segmentation = pipes.create_segmentation()
+    >>> segmentation.inputnode.dwi_image = ['path/to/dwi/image']
+    >>> segmentation.inputnode.struct_image = ['path/to/struct/image']
+    >>> segmentation.run()
+
+    Inputs::
+
+      [mandatory]
+      inputnode.structural_image
+      inputnode.subject_id
+
+    Outputs::
+
+    """
+    import nipype.pipeline.engine as pe
+    import nipype.interfaces.utility as util
+    import nipype.interfaces.freesurfer.preprocess as fs
+
+    # Get base dir
+    import os
+    _base_dir = os.path.abspath(base_dir)
+    
+    # Create this workflow
+    this_workflow = pe.Workflow(name=name)
+    
+    # Setup input node
+    inputnode = pe.Node(interface=util.IdentityInterface(
+        fields=['structural_image', 'subject_id']),
+                        name='inputnode')
+    
+    # Freesurfer recon_all
+    recon_all = pe.Node(interface=fs.ReconAll(directive="all",
+                                              subject_id='FREESURFER')
+                        , name='recon_all')
+
+    # Connect workflow
+    this_workflow.connect(inputnode, ('subject_id', freesurfer_dir, _base_dir), recon_all, 'subjects_dir')
+    this_workflow.connect(inputnode, 'structural_image', recon_all, 'T1_files')
+    
+    # Return workflow
+    return this_workflow
+
+def freesurfer_dir(subject_id, base_dir):
+    """Return a freesurfer dir for given params"""
+    import os.path
+    return os.path.join(os.path.abspath(base_dir),subject_id)
