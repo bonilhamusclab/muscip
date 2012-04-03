@@ -140,7 +140,7 @@ def cmat_for_key(connectome, key, number_of_nodes=None,
     
 def extract_hagmann_density(connectome, roi_img, wm_img):
     """Populate hagmann density for given connectome"""
-    
+
     def inverse_sum(elements):
         inverse_elements = []
         for element in elements:
@@ -274,7 +274,7 @@ def generate_connectome(fibers, roi_img):
     # return our results
     return connectome
     
-def length_of_streamline(streamline):
+def length_of_streamline(streamline, vox_dims=[1.,1.,1.]):
     """Return the length of streamline as determined by it's
     vertices
 
@@ -286,8 +286,9 @@ def length_of_streamline(streamline):
         start = vertices[idx]
         end = vertices[idx+1]
         from math import sqrt
-        distance = sqrt( (end[0]-start[0])**2 + (end[1]-start[1])**2 + \
-                         (end[2]-start[2])**2 )
+        distance = sqrt( ( (end[0]-start[0]) / vox_dims[0])**2 + \
+                         ( (end[1]-start[1]) / vox_dims[1])**2 + \
+                         ( (end[2]-start[2]) / vox_dims[2])**2 )
         segments.append(distance)
         idx += 1
     from math import fsum
