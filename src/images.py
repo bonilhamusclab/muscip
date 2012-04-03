@@ -331,6 +331,15 @@ def surface_area_for_rois(roiImage, maskImage):
     """
     ROI_data = roiImage.get_data()
     WM_data = maskImage.get_data()
+    # any voxel that is classified both as ROI and WM, for this case
+    # should be considered WM only, which means that if ROIs are
+    # dilated, we will respect the original border between grey and
+    # white matter rather than the new border resulting from dilation
+    ROI_voxels = np.argwhere(WM_data != 0)
+    for idx in ROI_voxels:
+        if ROI_data[tuple(idx)] != 0:
+            ROI_data[tuple(idx)] = 0
+    # now, go ahead and get the surface area for each ROI
     result = dict()
     for idx, value in np.ndenumerate(ROI_data):
         if value == 0:
