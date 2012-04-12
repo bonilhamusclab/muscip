@@ -1,5 +1,15 @@
+/build
+/dist
+/muscip.egg-info
+/MANIFEST
+/muscip/build
+/muscip/muscip.egg-info
+/doc/_build
+/doc/users/examples
+/doc/api/generated
 *.pyc
-.externalToolBuilders/*
+*.so
+.externalToolBuilders
 .project
 .pydevproject
-.settings/*
+.settings

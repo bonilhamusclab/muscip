@@ -62,7 +62,7 @@ def create_default_dti_workflow(base_dir,
     connectome_mapper = create_connectome()
     this_workflow.connect(tractography, 'outputnode.spline_filtered', connectome_mapper, 'inputnode.track_file')
     this_workflow.connect(apply_registration, 'outputnode.roi_file', connectome_mapper, 'inputnode.roi_file')
-    this_workflow.connect(tractography, 'outputnode.wm_mask', connectome_mapper, 'inputnode.wm_file')
+    this_workflow.connect(tractography, 'outputnode.mask_file', connectome_mapper, 'inputnode.wm_file')
     # Write out data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     datawriter = create_datawriter(base_dir)
     this_workflow.connect(datasource, 'outputnode.subject_id', datawriter, 'inputnode.subject_id')
@@ -202,12 +202,14 @@ def create_registration(name='registration'):
                         name='inputnode')
     # Get first volume from 4d diffusion image (we assume this is b0)
     extract_b0 = pe.Node(interface=fslutil.ExtractROI(t_min=0, t_size=1), name='extract_b0')
-    extract_b0.inputs.roi_file = 'DTI_first.nii.gz'
+    # TODO: debug runtime error caused when specifying name of output roi file
+    # extract_b0.inputs.roi_file = 'DTI_first.nii.gz'
+    #
     # Resample b0 to voxel size of 1mm
     import nipype.interfaces.freesurfer.preprocess as fspre
-    resample_b0 = pe.Node(interface=fspre.MRIConvert(),
+    resample_b0 = pe.Node(interface=fspre.Resample(),
                           name='resample_b0')
-    resample_b0.inputs.vox_size = tuple((1.,1.,1.))
+    resample_b0.inputs.voxel_size = tuple((1.,1.,1.))
     resample_b0.inputs.resampled_file = 'Diffusion_b0_resampled.nii.gz'
     # Align structural image to b0
     flirt = pe.Node(interface=fslpre.FLIRT( dof=6, cost='mutualinfo',
@@ -225,9 +227,9 @@ def create_registration(name='registration'):
     this_workflow.connect(inputnode, "dwi_image", extract_b0, "in_file")
     this_workflow.connect(inputnode, "structural_image", flirt, "in_file")
     this_workflow.connect(extract_b0, "roi_file", resample_b0, "in_file")
-    this_workflow.connect(resample_b0, "out_file", flirt, "reference")
+    this_workflow.connect(resample_b0, "resampled_file", flirt, "reference")
     this_workflow.connect(extract_b0, "roi_file", outputnode, "dwi_first")
-    this_workflow.connect(resample_b0, "out_file", outputnode, "dwi_resampled")
+    this_workflow.connect(resample_b0, "resampled_file", outputnode, "dwi_resampled")
     this_workflow.connect(flirt, "out_file", outputnode, "struct_to_dwi_image")
     this_workflow.connect(flirt, "out_matrix_file", outputnode, "struct_to_dwi_mat")    
     # Return workflow
@@ -395,7 +397,7 @@ def create_parcellation(name='parcellation'):
                         , name='inputnode')
     # Create Parcellator
     import nipype.interfaces.cmtk as cmtk    
-    cmtkp = cmtk.Parcellate()
+    cmtkp = pe.Node(interface=cmtk.Parcellate(), name='cmtkp')
     this_workflow.connect(inputnode, 'subject_id', cmtkp, 'subject_id')
     this_workflow.connect(inputnode, 'subjects_dir', cmtkp, 'subjects_dir')
     this_workflow.connect(inputnode, 'parcellation_name', cmtkp, 'parcellation_name')
@@ -420,21 +422,21 @@ def create_apply_registration(name="registerToBZero"):
                                                                  'wm_mask',
                                                                  'xform']), name='inputnode')
     # Co-register ROI - b0
-    register_ROI = pe.Node(interface=fslpre.ApplyXFM(), name='coregisterROI')
+    register_ROI = pe.Node(interface=fslpre.ApplyXfm(), name='coregisterROI')
     register_ROI.inputs.output_type = 'NIFTI_GZ'
     register_ROI.inputs.out_file = 'ROI_to_b0.nii.gz'
     register_ROI.inputs.apply_xfm = True
     this_workflow.connect(inputnode, 'roi_file', register_ROI, 'in_file')
     this_workflow.connect(inputnode, 'reference', register_ROI, 'reference')
-    this_workflow.connect(inputnode, 'xform', register_ROI, 'in_matrix')
+    this_workflow.connect(inputnode, 'xform', register_ROI, 'in_matrix_file')
     # Co-register wm_mask - b0
-    register_WM = pe.Node(interface=fslpre.ApplyXFM(), name='coregisterWM')
+    register_WM = pe.Node(interface=fslpre.ApplyXfm(), name='coregisterWM')
     register_WM.inputs.output_type = 'NIFTI_GZ'
     register_WM.inputs.out_file = 'fsmask_to_b0.nii.gz'
     register_WM.inputs.apply_xfm = True
     this_workflow.connect(inputnode, 'wm_mask', register_WM, 'in_file')
     this_workflow.connect(inputnode, 'reference', register_WM, 'reference')
-    this_workflow.connect(inputnode, 'xform', register_WM, 'in_matrix')
+    this_workflow.connect(inputnode, 'xform', register_WM, 'in_matrix_file')
     # Create output node
     outputnode = pe.Node(interface=util.IdentityInterface(fields=['roi_file', 'wm_mask']),
                          name='outputnode')
@@ -453,8 +455,8 @@ def create_connectome(name='connectome'):
                                                                  'track_file',
                                                                  'wm_file']), name='inputnode')
     # Connectome Generator
-    import nipype.interfaces.muscip as muscip
-    mapper = pe.Node(interface=muscip.ConnectomeGenerator(), name='mapper')
+    import muscip.interfaces.postproc as post
+    mapper = pe.Node(interface=post.ConnectomeGenerator(), name='mapper')
     mapper.inputs.network_file = 'connectome'
     this_workflow.connect(inputnode, 'roi_file', mapper, 'roi_file')
     this_workflow.connect(inputnode, 'track_file', mapper, 'track_file')
