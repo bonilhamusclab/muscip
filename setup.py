@@ -9,9 +9,13 @@ from glob import glob
 from muscip import info
 
 packages = ["muscip",
+            "muscip.atlas",
+            "muscip.atlas.freesurfer",
             "muscip.interfaces",
             "muscip.workflows",
             "muscip.workflows.connectivity"]
+
+package_data = {'muscip.atlas.freesurfer': ['data/*.nii.gz']}
 
 _info_fname = 'muscip/info.py'
 INFO_VARS = {}
@@ -53,6 +57,7 @@ def main(**extra_args):
           requires=INFO_VARS['REQUIRES'],
           scripts = glob('bin/*'),
           packages = packages,
+          package_data = package_data,
           **extra_args)
     
 if __name__ == '__main__':

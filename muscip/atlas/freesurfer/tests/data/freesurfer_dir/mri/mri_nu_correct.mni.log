@@ -1,0 +1,226 @@
+/home/tnesland/Data/tmp/20120321_atlas_compare/NativeFreesurfer/FREESURFER/mri
+/usr/local/freesurfer/bin/mri_nu_correct.mni
+--i orig.mgz --o nu.mgz --uchar transforms/talairach.xfm --n 2
+nIters 2
+$Id: mri_nu_correct.mni,v 1.18 2011/03/02 20:16:39 nicks Exp $
+Linux TN-ThinkStation-S20 3.0.0-16-generic #28-Ubuntu SMP Fri Jan 27 17:44:39 UTC 2012 x86_64 x86_64 x86_64 GNU/Linux
+Thu Mar 22 18:12:41 EDT 2012
+Program nu_correct, built from:
+Package MNI N3, version 1.10, compiled by nicks@minerva (x86_64-unknown-linux-gnu) on 2010-02-20 at 17:32:37
+tmpdir is ./tmp.mri_nu_correct.mni.8341
+/home/tnesland/Data/tmp/20120321_atlas_compare/NativeFreesurfer/FREESURFER/mri
+mri_convert orig.mgz ./tmp.mri_nu_correct.mni.8341/nu0.mnc -odt float
+mri_convert orig.mgz ./tmp.mri_nu_correct.mni.8341/nu0.mnc -odt float 
+$Id: mri_convert.c,v 1.179.2.2 2011/05/16 20:53:47 greve Exp $
+reading from orig.mgz...
+TR=1690.00, TE=0.00, TI=0.00, flip angle=0.00
+i_ras = (-1, 0, 0)
+j_ras = (0, 0, -1)
+k_ras = (0, 1, 0)
+changing data type from uchar to float (noscale = 0)...
+writing to ./tmp.mri_nu_correct.mni.8341/nu0.mnc...
+ 
+--------------------------------------------------------
+Iteration 1 Thu Mar 22 18:12:43 EDT 2012
+nu_correct -clobber ./tmp.mri_nu_correct.mni.8341/nu0.mnc ./tmp.mri_nu_correct.mni.8341/nu1.mnc -tmpdir ./tmp.mri_nu_correct.mni.8341/0/
+[tnesland@TN-ThinkStation-S20:/home/tnesland/Data/tmp/20120321_atlas_compare/NativeFreesurfer/FREESURFER/mri/] [2012-03-22 18:12:43] running:
+  /usr/local/freesurfer/mni/bin/nu_estimate_np_and_em -parzen -log -sharpen 0.15 0.01 -iterations 50 -stop 0.001 -shrink 4 -auto_mask -nonotify -b_spline 1 -distance 200 -quiet -execute -clobber -nokeeptmp -tmpdir ./tmp.mri_nu_correct.mni.8341/0/ ./tmp.mri_nu_correct.mni.8341/nu0.mnc ./tmp.mri_nu_correct.mni.8341/nu1.imp
+
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Number of iterations: 50 
+CV of field change: 0.00100942
+[tnesland@TN-ThinkStation-S20:/home/tnesland/Data/tmp/20120321_atlas_compare/NativeFreesurfer/FREESURFER/mri/] [2012-03-22 18:13:11] running:
+  /usr/local/freesurfer/mni/bin/make_template -quiet -shrink 3 ./tmp.mri_nu_correct.mni.8341/nu0.mnc ./tmp.mri_nu_correct.mni.8341/0//template.mnc
+
+Transforming slices:......................................................................................Done
+Transforming slices:................................................................................................................................................................................................................................................................Done
+ 
+ 
+--------------------------------------------------------
+Iteration 2 Thu Mar 22 18:13:14 EDT 2012
+nu_correct -clobber ./tmp.mri_nu_correct.mni.8341/nu1.mnc ./tmp.mri_nu_correct.mni.8341/nu2.mnc -tmpdir ./tmp.mri_nu_correct.mni.8341/1/
+[tnesland@TN-ThinkStation-S20:/home/tnesland/Data/tmp/20120321_atlas_compare/NativeFreesurfer/FREESURFER/mri/] [2012-03-22 18:13:14] running:
+  /usr/local/freesurfer/mni/bin/nu_estimate_np_and_em -parzen -log -sharpen 0.15 0.01 -iterations 50 -stop 0.001 -shrink 4 -auto_mask -nonotify -b_spline 1 -distance 200 -quiet -execute -clobber -nokeeptmp -tmpdir ./tmp.mri_nu_correct.mni.8341/1/ ./tmp.mri_nu_correct.mni.8341/nu1.mnc ./tmp.mri_nu_correct.mni.8341/nu2.imp
+
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Processing:.................................................................Done
+Number of iterations: 39 
+CV of field change: 0.0009429
+[tnesland@TN-ThinkStation-S20:/home/tnesland/Data/tmp/20120321_atlas_compare/NativeFreesurfer/FREESURFER/mri/] [2012-03-22 18:13:38] running:
+  /usr/local/freesurfer/mni/bin/make_template -quiet -shrink 3 ./tmp.mri_nu_correct.mni.8341/nu1.mnc ./tmp.mri_nu_correct.mni.8341/1//template.mnc
+
+Transforming slices:......................................................................................Done
+Transforming slices:................................................................................................................................................................................................................................................................Done
+ 
+ 
+ 
+mri_binarize --i ./tmp.mri_nu_correct.mni.8341/nu2.mnc --min -1 --o ./tmp.mri_nu_correct.mni.8341/ones.mgz
+
+$Id: mri_binarize.c,v 1.26.2.1 2011/04/08 15:40:50 greve Exp $
+cwd /home/tnesland/Data/tmp/20120321_atlas_compare/NativeFreesurfer/FREESURFER/mri
+cmdline mri_binarize --i ./tmp.mri_nu_correct.mni.8341/nu2.mnc --min -1 --o ./tmp.mri_nu_correct.mni.8341/ones.mgz 
+sysname  Linux
+hostname TN-ThinkStation-S20
+machine  x86_64
+user     tnesland
+
+input      ./tmp.mri_nu_correct.mni.8341/nu2.mnc
+frame      0
+nErode3d   0
+nErode2d   0
+output     ./tmp.mri_nu_correct.mni.8341/ones.mgz
+Binarizing based on threshold
+min        -1
+max        +infinity
+binval        1
+binvalnot     0
+Found 16777216 values in range
+Counting number of voxels
+Found 16777216 voxels in final mask
+mri_binarize done
+mri_segstats --id 1 --seg ./tmp.mri_nu_correct.mni.8341/ones.mgz --i orig.mgz --sum ./tmp.mri_nu_correct.mni.8341/sum.junk --avgwf ./tmp.mri_nu_correct.mni.8341/input.mean.dat
+
+$Id: mri_segstats.c,v 1.75.2.2 2011/04/27 22:18:58 nicks Exp $
+cwd 
+cmdline mri_segstats --id 1 --seg ./tmp.mri_nu_correct.mni.8341/ones.mgz --i orig.mgz --sum ./tmp.mri_nu_correct.mni.8341/sum.junk --avgwf ./tmp.mri_nu_correct.mni.8341/input.mean.dat 
+sysname  Linux
+hostname TN-ThinkStation-S20
+machine  x86_64
+user     tnesland
+Loading ./tmp.mri_nu_correct.mni.8341/ones.mgz
+Loading orig.mgz
+Voxel Volume is 1 mm^3
+Generating list of segmentation ids
+Found   1 segmentations
+Computing statistics for each segmentation
+  0     1   16777216  1.67772e+07
+
+Reporting on   1 segmentations
+Computing spatial average of each frame
+  0
+Writing to ./tmp.mri_nu_correct.mni.8341/input.mean.dat
+mri_segstats --id 1 --seg ./tmp.mri_nu_correct.mni.8341/ones.mgz --i ./tmp.mri_nu_correct.mni.8341/nu2.mnc --sum ./tmp.mri_nu_correct.mni.8341/sum.junk --avgwf ./tmp.mri_nu_correct.mni.8341/output.mean.dat
+
+$Id: mri_segstats.c,v 1.75.2.2 2011/04/27 22:18:58 nicks Exp $
+cwd 
+cmdline mri_segstats --id 1 --seg ./tmp.mri_nu_correct.mni.8341/ones.mgz --i ./tmp.mri_nu_correct.mni.8341/nu2.mnc --sum ./tmp.mri_nu_correct.mni.8341/sum.junk --avgwf ./tmp.mri_nu_correct.mni.8341/output.mean.dat 
+sysname  Linux
+hostname TN-ThinkStation-S20
+machine  x86_64
+user     tnesland
+Loading ./tmp.mri_nu_correct.mni.8341/ones.mgz
+Loading ./tmp.mri_nu_correct.mni.8341/nu2.mnc
+Voxel Volume is 1 mm^3
+Generating list of segmentation ids
+Found   1 segmentations
+Computing statistics for each segmentation
+  0     1   16777216  1.67772e+07
+
+Reporting on   1 segmentations
+Computing spatial average of each frame
+  0
+Writing to ./tmp.mri_nu_correct.mni.8341/output.mean.dat
+mris_calc -o ./tmp.mri_nu_correct.mni.8341/nu2.mnc ./tmp.mri_nu_correct.mni.8341/nu2.mnc mul .94595837757693493376
+mri_convert ./tmp.mri_nu_correct.mni.8341/nu2.mnc nu.mgz --like orig.mgz
+mri_convert ./tmp.mri_nu_correct.mni.8341/nu2.mnc nu.mgz --like orig.mgz 
+$Id: mri_convert.c,v 1.179.2.2 2011/05/16 20:53:47 greve Exp $
+reading from ./tmp.mri_nu_correct.mni.8341/nu2.mnc...
+TR=0.00, TE=0.00, TI=0.00, flip angle=0.00
+i_ras = (-1, 0, 0)
+j_ras = (0, 0, -1)
+k_ras = (0, 1, 0)
+INFO: transform src into the like-volume: orig.mgz
+writing to nu.mgz...
+mri_make_uchar nu.mgz transforms/talairach.xfm nu.mgz
+type change took 0 minutes and 8 seconds.
+mapping ( 5, 96) to ( 3, 110)
+ 
+ 
+Thu Mar 22 18:14:15 EDT 2012
+mri_nu_correct.mni done

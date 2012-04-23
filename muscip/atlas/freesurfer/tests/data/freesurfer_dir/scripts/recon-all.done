@@ -1,0 +1,10 @@
+------------------------------
+SUBJECT FREESURFER
+DATE Fri Mar 23 05:38:57 EDT 2012
+USER tnesland
+HOST TN-ThinkStation-S20
+PROCESSOR x86_64
+OS Linux
+Linux TN-ThinkStation-S20 3.0.0-16-generic #28-Ubuntu SMP Fri Jan 27 17:44:39 UTC 2012 x86_64 x86_64 x86_64 GNU/Linux
+$Id: recon-all,v 1.379.2.17 2011/05/20 22:48:18 nicks Exp $
+/usr/local/freesurfer/bin/recon-all
