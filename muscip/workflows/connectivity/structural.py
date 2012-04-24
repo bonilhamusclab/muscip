@@ -455,8 +455,8 @@ def create_connectome(name='connectome'):
                                                                  'track_file',
                                                                  'wm_file']), name='inputnode')
     # Connectome Generator
-    import muscip.interfaces.postproc as post
-    mapper = pe.Node(interface=post.ConnectomeGenerator(), name='mapper')
+    import muscip.interfaces.connectome as ctome
+    mapper = pe.Node(interface=ctome.ConnectomeGenerator(), name='mapper')
     mapper.inputs.network_file = 'connectome'
     this_workflow.connect(inputnode, 'roi_file', mapper, 'roi_file')
     this_workflow.connect(inputnode, 'track_file', mapper, 'track_file')

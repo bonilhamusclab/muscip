@@ -13,6 +13,7 @@ iflogger = logging.getLogger('interface')
 
 class ConnectomeGeneratorInputSpec(TraitedSpec):
     network_file = File(genfile=True, desc='NetworkX graph that will be generated')
+    node_info_file = File(exists=True, mandatory=False, desc='GraphML file containing node information')
     roi_file = File(exists=True, mandatory=True, desc='ROI volume')
     track_file = File(exists=True, mandatory=True, desc='Trackvis track file')
     wm_file = File(exists=True, mandatory=True, desc='White matter mask used in tractography')
@@ -28,6 +29,7 @@ class ConnectomeGenerator(BaseInterface):
     >>> import nipype.interfaces.muscip as muscip
     >>> ng = muscip.NetworkGenerator()
     >>> ng.inputs.network_filename = 'desired_output.pkl'
+    >>> ng.inputs.node_info_file = 'path/to/node/info.graphml'
     >>> ng.inputs.roi_file = 'path/to/roi/volume'
     >>> ng.inputs.track_file = 'path/to/trackfile.trk'
     >>> ng.inputs.wm_file = 'path/to/wm_file'
@@ -49,7 +51,10 @@ class ConnectomeGenerator(BaseInterface):
         iflogger.info('Loading .trk file...')
         fib = fibers.read(self.inputs.track_file)
         iflogger.info('Generating connectome...')
-        con = connectome.generate_connectome(fib, roi)
+        if isdefined(self.inputs.node_info_file):
+            con = connectome.generate_connectome(fib, roi, node_info=self.inputs.node_info_file)
+        else:
+            con = connectome.generate_connectome(fib, roi)
         iflogger.info('Extracting Hagmann density...')
         con.populate_hagmann_density(wm, roi)
         iflogger.info('Saving output...')
