@@ -24,3 +24,7 @@ class Test_Freesurfer(unittest.TestCase):
         import nibabel
         cmtk_wm_mask = nibabel.load(self.cmtk_wm_mask_path)
         assert my_fs.wm_mask.get_data().all() == cmtk_wm_mask.get_data().all()
+
+    def test_freesurfer_has_node_info(self):
+        my_fs = fs.load(self.freesurfer_dir)
+        assert my_fs.node_info.node[str(82)]['name'] == 'Left-Amygdala'

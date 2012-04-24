@@ -24,9 +24,10 @@ class Freesurfer(object):
         look-up-tables
 
         """
-        self.gm_lut = None
+        self.gm_lut = _def_gm_lut()
+        self.node_info = _def_node_info()
         self.roi_img = None
-        self.wm_lut = None        
+        self.wm_lut = _def_wm_lut()
         self.wm_mask = None
 
 def load(freesurfer_dir, gm_lut=None, wm_lut=None):
@@ -39,22 +40,20 @@ def load(freesurfer_dir, gm_lut=None, wm_lut=None):
     aparc_aseg = _convert_mgz_to_niigz_and_load(join(freesurfer_dir,
                                                      'mri/aparc+aseg.mgz'))
     aparc_aseg_data = aparc_aseg.get_data()
-    # load luts
-    ###########
-    if not gm_lut:
-        gm_lut = _def_gm_lut()
-    if not wm_lut:
-        wm_lut = _def_wm_lut()
-    newAtlas.gm_lut = gm_lut
-    newAtlas.wm_lut = wm_lut
+    # load any custom luts
+    ######################
+    if gm_lut:
+        newAtlas.gm_lut = gm_lut
+    if wm_lut:
+        newAtlas.wm_lut = wm_lut
     # map fs labels to expected labels
     ##################################
     import numpy as np
     roi_data = np.zeros(aparc_aseg_data.shape, dtype=np.uint8)
-    for map_entry in gm_lut:
+    for map_entry in newAtlas.gm_lut:
         roi_data[ aparc_aseg_data == map_entry[1]] = map_entry[0]
     wm_data = np.zeros(aparc_aseg_data.shape, dtype=np.uint8)
-    for map_entry in wm_lut:
+    for map_entry in newAtlas.wm_lut:
         wm_data[ aparc_aseg_data == map_entry] = 1
     # re-orient wm and roi images to orig
     #####################################
@@ -112,6 +111,14 @@ def _def_gm_lut():
         print e
         return None
     return read_lut
+
+def _def_node_info():
+    """Return node info as networkx object with data for each node"""
+    import networkx
+    import os.path
+    module_path = os.path.split(__file__)[0]
+    node_info_path = os.path.join(module_path,'data/freesurfer_node_info.graphml')
+    return networkx.read_graphml(node_info_path)
 
 def _def_wm_lut():
     """Returnt the path to default white matter lookup table"""

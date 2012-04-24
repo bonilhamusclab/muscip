@@ -15,7 +15,7 @@ packages = ["muscip",
             "muscip.workflows",
             "muscip.workflows.connectivity"]
 
-package_data = {'muscip.atlas.freesurfer': ['data/*.nii.gz']}
+package_data = {'muscip.atlas.freesurfer': ['data/*']}
 
 _info_fname = 'muscip/info.py'
 INFO_VARS = {}
