@@ -28,8 +28,33 @@ class TNConnectome(networkx.Graph):
                         inverse_sum( self[i][j]['streamlines_length'] ) )
             self[i][j]['hagmann_density'] = calc_hd
 
+    def populate_node_info(self, ROI_img_data, node_info_file):
+        """Populate node information such as ROI name and center of
+        mass in the given connectome.
+
+        Inputs::
+        
+          ROI_img - the ROI image data (as numpy ndarray) from which
+                    the connectome was generated. We will use this to
+                    generate centers of mass.
+          node_info_file - a graphml file which contains node
+                           information
+
+        """
+        import numpy as np
+        # read node info file
+        try:
+            node_info = networkx.read_graphml(node_info_file)
+        except:
+            print "Could not read node_info_file!"
+            return
+        # add node information
+        for label, data in node_info.nodes_iter(data=True):
+            self.add_node(int(label), data)
+            self.node[int(label)]['subject_position'] = tuple( np.mean ( np.where ( ROI_img_data == int(label) ), axis=1 ) )
+
 # MODULE LEVEL FUNCTIONS
-def generate_connectome(fib, roi_img):
+def generate_connectome(fib, roi_img, node_info=None):
     """Return a TNConnectome object
 
     Example
@@ -55,6 +80,9 @@ def generate_connectome(fib, roi_img):
     connectome.graph['roi_img'] = os.path.abspath(roi_img.get_filename())
     # get ROI data
     roi_data = roi_img.get_data()
+    # load node info if provided
+    if node_info:
+        connectome.populate_node_info(roi_data, node_info)
     # get our vertex key
     if fib.get_spacing() == 'mm':
         vertex_key = 'vertices_mm'
