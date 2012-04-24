@@ -17,13 +17,13 @@ class Test_Freesurfer(unittest.TestCase):
         my_fs = fs.load(self.freesurfer_dir)
         import nibabel
         cmtk_fs_rois = nibabel.load(self.cmtk_rois_path)
-        assert my_fs.roi_img.get_data().all() == cmtk_fs_rois.get_data().all()
+        assert (my_fs.roi_img.get_data() == cmtk_fs_rois.get_data()).all()
 
     def test_freesurfer_wm_mask_eq_to_cmtk_freesurfer_wm_mask(self):
         my_fs = fs.load(self.freesurfer_dir)
         import nibabel
         cmtk_wm_mask = nibabel.load(self.cmtk_wm_mask_path)
-        assert my_fs.wm_mask.get_data().all() == cmtk_wm_mask.get_data().all()
+        assert (my_fs.wm_mask.get_data() == cmtk_wm_mask.get_data()).all()
 
     def test_freesurfer_has_node_info(self):
         my_fs = fs.load(self.freesurfer_dir)
