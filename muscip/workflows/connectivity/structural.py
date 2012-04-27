@@ -40,17 +40,16 @@ def create_default_dti_workflow(base_dir,
     segmentation = create_segmentation(base_dir)
     this_workflow.connect(datasource, 'outputnode.struct_image', segmentation, 'inputnode.structural_image')
     this_workflow.connect(datasource, 'outputnode.subject_id', segmentation, 'inputnode.subject_id')
-    # Parcellation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    parcellation = create_parcellation()
-    parcellation.inputs.inputnode.parcellation_name = 'scale33'
-    this_workflow.connect(segmentation, 'outputnode.subjects_dir', parcellation, 'inputnode.subjects_dir')
-    this_workflow.connect(segmentation, 'outputnode.subject_id', parcellation, 'inputnode.subject_id')
+    # Atlas Creation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    fs_atlas = create_fs_atlas()
+    this_workflow.connect(datasource, ('outputnode.subject_id', real_freesurfer_dir, base_dir)
+                          , fs_atlas, 'inputnode.freesurfer_dir')
     # Apply Registration ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     apply_registration = create_apply_registration()
     this_workflow.connect(datasource, 'outputnode.dwi_image', apply_registration, 'inputnode.reference')
     this_workflow.connect(registration, 'outputnode.struct_to_dwi_mat', apply_registration, 'inputnode.xform')
-    this_workflow.connect(parcellation, 'outputnode.roi_file', apply_registration, 'inputnode.roi_file')
-    this_workflow.connect(parcellation, 'outputnode.wm_mask', apply_registration, 'inputnode.wm_mask')
+    this_workflow.connect(fs_atlas, 'outputnode.roi_img', apply_registration, 'inputnode.roi_file')
+    this_workflow.connect(fs_atlas, 'outputnode.wm_img', apply_registration, 'inputnode.wm_mask')
     # Tractography ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     tractography = create_tractography()
     this_workflow.connect(datasource, 'outputnode.dwi_image', tractography, 'inputnode.dwi')
@@ -68,8 +67,8 @@ def create_default_dti_workflow(base_dir,
     this_workflow.connect(datasource, 'outputnode.subject_id', datawriter, 'inputnode.subject_id')
     this_workflow.connect(registration, 'outputnode.struct_to_dwi_image', datawriter, 'inputnode.t1_to_b0_img')
     this_workflow.connect(registration, 'outputnode.struct_to_dwi_mat', datawriter, 'inputnode.t1_to_b0_mat')
-    this_workflow.connect(parcellation, 'outputnode.roi_file', datawriter, 'inputnode.roi')
-    this_workflow.connect(parcellation, 'outputnode.roi_file', datawriter, 'inputnode.fs_mask')
+    this_workflow.connect(fs_atlas, 'outputnode.roi_img', datawriter, 'inputnode.roi')
+    this_workflow.connect(fs_atlas, 'outputnode.wm_img', datawriter, 'inputnode.fs_mask')
     this_workflow.connect(apply_registration, 'outputnode.roi_file', datawriter, 'inputnode.roi_to_b0')
     this_workflow.connect(apply_registration, 'outputnode.wm_mask', datawriter, 'inputnode.fs_mask_to_b0')
     this_workflow.connect(tractography, 'outputnode.mask_file', datawriter, 'inputnode.fa_mask')
@@ -78,6 +77,71 @@ def create_default_dti_workflow(base_dir,
     this_workflow.connect(connectome_mapper, 'outputnode.network_file', datawriter, 'inputnode.network_file')
     # Return this workflow ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     return this_workflow
+
+def create_post_fs_dti_workflow(base_dir, subject_ids, name='post_fs_workflow'):
+    """Generate connectomes given that freesurfer recon-all has
+    already been run and we have access to folders
+
+    Example
+    -------
+
+    >>> from muscip.workflows.connectivity import structural
+    >>> workflow = structural.create_post_fs_dti_workflow(base_dir, subject_ids)
+    >>> workflow.run()
+
+    Inputs::
+
+      base_dir: directory containing all subjects
+      subject_ids: list of strings corresponding to subject ids
+    """
+    import nipype.pipeline.engine as pe
+    # Create our workflow so we can connect as we go ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    this_workflow = pe.Workflow(name=name)
+    # Grab data for all subject ids from base directory ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    datasource = create_datasource(base_dir, subject_ids)
+    # Registration ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    registration = create_registration()
+    this_workflow.connect(datasource, 'outputnode.dwi_image', registration, 'inputnode.dwi_image')
+    this_workflow.connect(datasource, 'outputnode.struct_image', registration, 'inputnode.structural_image')
+    # Atlas Creation ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    fs_atlas = create_fs_atlas()
+    this_workflow.connect(datasource, ('outputnode.subject_id', real_freesurfer_dir, base_dir)
+                          , fs_atlas, 'inputnode.freesurfer_dir')
+    # Apply Registration ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    apply_registration = create_apply_registration()
+    this_workflow.connect(datasource, 'outputnode.dwi_image', apply_registration, 'inputnode.reference')
+    this_workflow.connect(registration, 'outputnode.struct_to_dwi_mat', apply_registration, 'inputnode.xform')
+    this_workflow.connect(fs_atlas, 'outputnode.roi_img', apply_registration, 'inputnode.roi_file')
+    this_workflow.connect(fs_atlas, 'outputnode.wm_img', apply_registration, 'inputnode.wm_mask')
+    # Tractography ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    tractography = create_tractography()
+    this_workflow.connect(datasource, 'outputnode.dwi_image', tractography, 'inputnode.dwi')
+    this_workflow.connect(datasource, 'outputnode.bvals', tractography, 'inputnode.bvals')
+    this_workflow.connect(datasource, 'outputnode.bvecs', tractography, 'inputnode.bvecs')
+    this_workflow.connect(datasource, ('outputnode.bvals', number_of_b0_for_bvals),
+                          tractography, 'inputnode.number_b0')
+    # Connectome Mapping ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    connectome_mapper = create_connectome()
+    this_workflow.connect(fs_atlas, 'outputnode.node_info', connectome_mapper, 'inputnode.node_info')
+    this_workflow.connect(tractography, 'outputnode.spline_filtered', connectome_mapper, 'inputnode.track_file')
+    this_workflow.connect(apply_registration, 'outputnode.roi_file', connectome_mapper, 'inputnode.roi_file')
+    this_workflow.connect(tractography, 'outputnode.mask_file', connectome_mapper, 'inputnode.wm_file')
+    # Write out data ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    datawriter = create_datawriter(base_dir)
+    this_workflow.connect(datasource, 'outputnode.subject_id', datawriter, 'inputnode.subject_id')
+    this_workflow.connect(registration, 'outputnode.struct_to_dwi_image', datawriter, 'inputnode.t1_to_b0_img')
+    this_workflow.connect(registration, 'outputnode.struct_to_dwi_mat', datawriter, 'inputnode.t1_to_b0_mat')
+    this_workflow.connect(fs_atlas, 'outputnode.roi_img', datawriter, 'inputnode.roi')
+    this_workflow.connect(fs_atlas, 'outputnode.wm_img', datawriter, 'inputnode.fs_mask')
+    this_workflow.connect(apply_registration, 'outputnode.roi_file', datawriter, 'inputnode.roi_to_b0')
+    this_workflow.connect(apply_registration, 'outputnode.wm_mask', datawriter, 'inputnode.fs_mask_to_b0')
+    this_workflow.connect(tractography, 'outputnode.mask_file', datawriter, 'inputnode.fa_mask')
+    this_workflow.connect(tractography, 'outputnode.streamline', datawriter, 'inputnode.streamline')
+    this_workflow.connect(tractography, 'outputnode.spline_filtered', datawriter, 'inputnode.spline_filtered')
+    this_workflow.connect(connectome_mapper, 'outputnode.network_file', datawriter, 'inputnode.network_file')
+    # Return this workflow ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    return this_workflow
+    
 
 def create_datasource(base_dir, subject_ids, name='datasource'):
     import nipype.pipeline.engine as pe
@@ -149,7 +213,8 @@ def create_datawriter(base_dir, name='datawriter'):
     datasink.inputs.substitutions = [('DTI_roi.nii.gz', 'DTI_first.nii.gz'),
                                      ('DTI_roi_out.nii.gz', 'Diffusion_b0_resampled.nii.gz'),
                                      ('T1_flirt.nii.gz', 'T1-TO-b0.nii.gz'),
-                                     ('T1_flirt.mat', 'transformations/T1-TO-b0.mat')]
+                                     ('T1_flirt.mat', 'T1-TO-b0.mat'),
+                                     ('roi.nii.gz', 'ROI.nii.gz')]
     # connect the pipes
     this_workflow.connect(inputnode, 'subject_id', datasink, 'container')
     this_workflow.connect(inputnode, 't1_to_b0_img', datasink, 'NIFTI.@t1_to_b0_img')
@@ -210,12 +275,12 @@ def create_registration(name='registration'):
     resample_b0 = pe.Node(interface=fspre.Resample(),
                           name='resample_b0')
     resample_b0.inputs.voxel_size = tuple((1.,1.,1.))
-    resample_b0.inputs.resampled_file = 'Diffusion_b0_resampled.nii.gz'
+    # resample_b0.inputs.resampled_file = 'Diffusion_b0_resampled.nii.gz'
     # Align structural image to b0
     flirt = pe.Node(interface=fslpre.FLIRT( dof=6, cost='mutualinfo',
                                             uses_qform=True), name="flirt")
-    flirt.inputs.out_file = 'T1-TO-b0.nii.gz'
-    flirt.inputs.out_matrix_file = 'T1-TO-b0.mat'
+    # flirt.inputs.out_file = 'T1-TO-b0.nii.gz'
+    # flirt.inputs.out_matrix_file = 'T1-TO-b0.mat'
     # Setup output node
     outputnode = pe.Node(interface=util.IdentityInterface(
         fields=['dwi_first', 'dwi_resampled', 'struct_to_dwi_image',
@@ -254,6 +319,10 @@ def create_tractography(name='tractography'):
       inputnode.dwi
       inputnode.bvals
       inputnode.bvecs
+      inputnode.number_b0
+
+      [optional]
+      inputnode.mask
 
     Outputs::
 
@@ -356,56 +425,39 @@ def create_segmentation(base_dir, name='segmentation'):
     # Return workflow
     return this_workflow
 
-def create_parcellation(name='parcellation'):
-    """Subdivides segmented ROI file into smaller subregions
-
-    Example
-    -------
-    >>> import tn_image_processing.workflows as pipes
-    >>> parcellation = pipes.create_parcellation()
-    >>> # for cmtk subject_id would actually be 'FREESURFER'
-    >>> parcellation.inputs.inputnode.subject_id = ['path/to/freesurfer/subject/id']
-    >>> # for cmtk subjects_dir would actually be the subject id
-    >>> parcellation.inputs.inputnode.subjects_dir = ['path/to/freesurfer/subjects/dir']
-    >>> parcellation.inputs.inputnode.parcellation_name = 'scale33'
+def create_fs_atlas(name='fsatlas'):
+    """Generate Freesurfer atlas given a fs directory that has been
+    processed with recon-all
 
     Inputs::
 
       [mandatory]
-      inputnode.b0_img
-      inputnode.subject_id - freesurfer subject_id (for cmtk 'FREESURFER')
-      inputnode.subjects_dir - freesurfer subjects_dir (for cmtk, subject id)
-      inputnode.parcellation_name - can be scale#, where number is one of
-                                    {33,60,125,250,500}
-      inputnode.xform
-
+      inputnode.freesurfer_dir: directory successfully processed with recon-all
+      
     Outputs::
 
-      outputnode.roi_file
-      outputnode.wm_mask
-        
+      node_info: node information associated with freesurfer atlas
+      roi_img: roi image extracted from freesurfer
+      wm_img: wm image extracted from freesurfer
     """
     import nipype.pipeline.engine as pe
     import nipype.interfaces.utility as util
-
-    # Create our workflow so we can connect as we go
+    import muscip.interfaces.atlas as atlas
+    # Create this workflow
     this_workflow = pe.Workflow(name=name)
-    # Create inputnode
-    inputnode = pe.Node(interface=util.IdentityInterface(fields=['subject_id',
-                                                                 'subjects_dir',
-                                                                 'parcellation_name'])
-                        , name='inputnode')
-    # Create Parcellator
-    import nipype.interfaces.cmtk as cmtk    
-    cmtkp = pe.Node(interface=cmtk.Parcellate(), name='cmtkp')
-    this_workflow.connect(inputnode, 'subject_id', cmtkp, 'subject_id')
-    this_workflow.connect(inputnode, 'subjects_dir', cmtkp, 'subjects_dir')
-    this_workflow.connect(inputnode, 'parcellation_name', cmtkp, 'parcellation_name')
-    # Create Output
-    outputnode = pe.Node(interface=util.IdentityInterface(fields=['roi_file', 'wm_mask']),
-                         name='outputnode')
-    this_workflow.connect(cmtkp, 'roi_file', outputnode, 'roi_file')
-    this_workflow.connect(cmtkp, 'white_matter_mask_file', outputnode, 'wm_mask')
+    # Setup input node
+    inputnode = pe.Node(interface=util.IdentityInterface(fields=['freesurfer_dir']),
+                        name='inputnode')
+    # Setup atlas extract node
+    atlasExtract = pe.Node(interface=atlas.FreesurferAtlas(), name='atlasExtract')
+    this_workflow.connect(inputnode, 'freesurfer_dir', atlasExtract, 'freesurfer_dir')
+    # Setup output node
+    outputnode = pe.Node(interface=util.IdentityInterface(fields=['node_info',
+                                                                  'roi_img',
+                                                                  'wm_img']), name='outputnode')
+    this_workflow.connect(atlasExtract, 'node_info', outputnode, 'node_info')
+    this_workflow.connect(atlasExtract, 'roi_img', outputnode, 'roi_img')
+    this_workflow.connect(atlasExtract, 'wm_img', outputnode, 'wm_img')
     # Return this workflow
     return this_workflow
 
@@ -424,16 +476,18 @@ def create_apply_registration(name="registerToBZero"):
     # Co-register ROI - b0
     register_ROI = pe.Node(interface=fslpre.ApplyXfm(), name='coregisterROI')
     register_ROI.inputs.output_type = 'NIFTI_GZ'
-    register_ROI.inputs.out_file = 'ROI_to_b0.nii.gz'
+    # register_ROI.inputs.out_file = 'ROI_to_b0.nii.gz'
     register_ROI.inputs.apply_xfm = True
+    register_ROI.inputs.interp = 'nearestneighbour'
     this_workflow.connect(inputnode, 'roi_file', register_ROI, 'in_file')
     this_workflow.connect(inputnode, 'reference', register_ROI, 'reference')
     this_workflow.connect(inputnode, 'xform', register_ROI, 'in_matrix_file')
     # Co-register wm_mask - b0
     register_WM = pe.Node(interface=fslpre.ApplyXfm(), name='coregisterWM')
     register_WM.inputs.output_type = 'NIFTI_GZ'
-    register_WM.inputs.out_file = 'fsmask_to_b0.nii.gz'
+    # register_WM.inputs.out_file = 'fsmask_to_b0.nii.gz'
     register_WM.inputs.apply_xfm = True
+    register_WM.inputs.interp = 'nearestneighbour'
     this_workflow.connect(inputnode, 'wm_mask', register_WM, 'in_file')
     this_workflow.connect(inputnode, 'reference', register_WM, 'reference')
     this_workflow.connect(inputnode, 'xform', register_WM, 'in_matrix_file')
@@ -451,13 +505,15 @@ def create_connectome(name='connectome'):
     # Create this workflow
     this_workflow = pe.Workflow(name=name)
     # Inputnode
-    inputnode = pe.Node(interface=util.IdentityInterface(fields=['roi_file',
+    inputnode = pe.Node(interface=util.IdentityInterface(fields=['node_info',
+                                                                 'roi_file',
                                                                  'track_file',
                                                                  'wm_file']), name='inputnode')
     # Connectome Generator
     import muscip.interfaces.connectome as ctome
     mapper = pe.Node(interface=ctome.ConnectomeGenerator(), name='mapper')
     mapper.inputs.network_file = 'connectome'
+    this_workflow.connect(inputnode, 'node_info', mapper, 'node_info_file')
     this_workflow.connect(inputnode, 'roi_file', mapper, 'roi_file')
     this_workflow.connect(inputnode, 'track_file', mapper, 'track_file')
     this_workflow.connect(inputnode, 'wm_file', mapper, 'wm_file')
@@ -472,6 +528,11 @@ def freesurfer_dir(subject_id, base_dir):
     import os.path
     return os.path.join(os.path.abspath(base_dir),subject_id)
 
+def real_freesurfer_dir(subject_id, base_dir):
+    """Return a freesurfer dir for given params"""
+    import os.path
+    return os.path.join(os.path.abspath(base_dir),subject_id,'FREESURFER')
+    
 def number_of_b0_for_bvals(bvals):
     """Return the number of b0's in the given b-value file."""
     import numpy
@@ -482,4 +543,3 @@ def number_of_b0_for_bvals(bvals):
         print e
         return None
     return len(numpy.where(read_bvals==0))
-    
