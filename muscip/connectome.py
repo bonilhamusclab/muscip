@@ -1,6 +1,5 @@
 import networkx
 
-
 class TNConnectome(networkx.Graph):
     """Connectome as defined by me!"""
 
@@ -158,7 +157,7 @@ class TNConnectome(networkx.Graph):
         self.graph['info'] = info
 
     def write(self, filename):
-        """Write connectom to the given filename as gpickle.
+        """Write connectome to the given filename as gpickle.
 
         Inputs::
 
@@ -189,6 +188,79 @@ class TNConnectome(networkx.Graph):
             print e
 
 # MODULE LEVEL FUNCTIONS
+def add_info_to_connectomes_from_csv(connectomes,
+                                     csvfile,
+                                     id_key,
+                                     new_filename=None):
+    """Add info extracted from a well-formed csv file to the given
+    connectomes. Connectomes are provided in the form of a dictionary
+
+    Example
+    -------
+    >>> import muscip.connectome
+    >>> connectomes = {'SUB001': 'SUB001/results/connectome.pkl',
+    >>>                'SUB002': 'SUB002/results/connectome.pkl' }
+    >>> muscip.connectome.add_info_to_connectomes_from_csv(connectomes,
+    >>>                                                    'my_infofile.csv',
+    >>>                                                    'Subject_ID')
+
+    Input::
+
+      connectome: a dictionary where the key corresponds to the
+      subject id in the csv file, and the value is the path at which
+      the subject's connectome file is found
+
+      csvfile: path to csv file which contains clinical info for connectomes
+
+      id_key: string matching the header under which subject id will
+      be found in the csv file
+
+      new_filename: (optional) name of new connectome - if none is
+      provided, will overwrite existing connectome file.
+
+    """
+    import os.path as op
+    from copy import copy
+    # create the csv reader and grab data
+    try:
+        import csv
+        read_info = dict()
+        f = open(op.abspath(csvfile), 'rt')
+        reader = csv.DictReader(f)
+        for record in reader:
+            read_info[record[id_key]] = record
+    except Exception, e:
+        print e
+    finally:
+        f.close()
+    # for every connectome entry, try and get info from the info we
+    # previously read
+    for C_id in connectomes.keys():
+        # try to get record from read info
+        try:
+            new_info = read_info[C_id]
+        except KeyError:
+            print "No info found in csv file for: %s" % C_id
+            continue
+        # try to read connectome file and return as copy of itself
+        try:
+            C_path = op.abspath(connectomes[C_id])
+            C_dir = op.dirname(C_path)
+            C = copy(read_gpickle(C_path))
+        except Exception, e:
+            print "Could not read connectome file -- %s" % e
+            continue
+        # set new info
+        C.set_info(new_info)
+        # try to save connectome
+        try:
+            if new_filename:
+                C.write(op.join(C_dir, new_filename))
+            else:
+                C.write(C_path)
+        except Exception, e:
+            print "Could not save connectome file -- %s" % e
+            
 def edge_data_for_connectomes_as_df(C_list, edge_data_key, filename,
                                     include_info=True, node_name_key=None):
     """Write data frame as csv file to the given path.
