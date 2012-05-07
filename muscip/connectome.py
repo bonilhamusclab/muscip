@@ -371,8 +371,8 @@ def generate_connectome(fib, roi_img, node_info=None):
         # to the propegation of the tracks beyond the bounds of ROI
         # image in tracking)
         try:
-            label_i = roi_data[tuple(voxel_i)]
-            label_j = roi_data[tuple(voxel_j)]
+            label_i = int(roi_data[tuple(voxel_i)])
+            label_j = int(roi_data[tuple(voxel_j)])
         except IndexError:
             continue
         # if both endpoints reside in ROIs (both endpoints are
