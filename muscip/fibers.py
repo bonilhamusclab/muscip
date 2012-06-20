@@ -10,8 +10,8 @@ class TNFibers(object):
     ):
         self.data = data
         self.format = format
-        self.header = header
-        self._spacing = spacing
+        self.set_header(header)
+        self.set_spacing(spacing)
         self._load_alternative_spacings()
         
     def get_data(self):
@@ -19,10 +19,8 @@ class TNFibers(object):
             return self.data
 
     def get_dim(self):
-        if self.format == 'trackvis':
-            if self.header:
-                return self.get_value_for_header_key('dim')
-        
+        return self.get_value_for_header_key('dim')
+    
     def get_header(self):
         return self.header
         
@@ -35,11 +33,25 @@ class TNFibers(object):
                 return self.get_value_for_header_key('voxel_size')
 
     def get_value_for_header_key(self, key):
+        if not self.header:
+            return None
         if self.format == 'trackvis':
             try:
-                return self.header[self._trackvis_header_fields()[key]]
+                return self.header[key]
             except:
                 return None
+        return None
+
+    def set_dims(self,x,y,z):
+        self.set_value_for_header_key('dim',[x,y,z])
+        
+    def set_header(self, header):
+        if not header:
+            self.header = None
+            return
+        if hasattr(header, 'flags.writeable'):
+            header.flags.writeable = True
+        self.header = header
 
     def set_spacing(self, new_spacing):
         accepted_spacing = ['mm', 'vox']
@@ -52,7 +64,38 @@ class TNFibers(object):
             if self.format == 'trackvis':
                 self._vertex_key = 'vertices_vox'
         self._spacing = new_spacing
+
+    def set_value_for_header_key(self, key, value):
+        if not self.header:
+            return None
+        if self.format == 'trackvis':
+            try:
+                self.header[key] = value
+            except Exception as e:
+                raise e
+            
+    def set_voxel_size(self,x,y,z):
+        self.set_value_for_header_key('voxel_size',[x,y,z])
         
+    def streamlines(self):
+        result = list()
+        for fiber_key, fiber in self.get_data().items():
+            result.append((fiber[self._vertex_key],None,None))
+        return result
+
+    def write(self, filename):
+        if self.format == 'trackvis':
+            import nibabel.trackvis
+            if self.get_spacing == 'vox':
+                ps = 'voxel'
+            else:
+                ps = None
+            if self.header is not None:
+                nibabel.trackvis.write(filename, self.streamlines(),
+                                       hdr_mapping=self.header, points_space=ps)
+            else:
+                nibabel.trackvis.write(filename, self.streamlines(), point_space=ps)
+                
     def _load_alternative_spacings(self):
         """Populate the data with both voxel and mm based spacing
         values.
@@ -296,18 +339,59 @@ def length_of_streamline(streamline, vox_dims=[1.,1.,1.]):
 
 def read(file, format='trackvis'):
     """Load a TNFibers object from file and return"""
-    accepted_formats = ['trackvis']
+    accepted_formats = ['trackvis','fiber_tools','mitk']
     if format not in accepted_formats:
         print "%s is not an accepted format" % format
         raise
+    # TRACKVIS
     if format == 'trackvis':
         import nibabel.trackvis
         read_data = nibabel.trackvis.read(file)
         my_data = dict()
         for idx, rec in enumerate(read_data[0]):
             my_data[idx] = {'vertices_mm': rec[0]}
-        my_header = read_data[1].tolist()
-        return TNFibers(data=my_data, format='trackvis', header=my_header)
+        return TNFibers(data=my_data, format='trackvis', header=read_data[1])
+    # FIBERTOOLS
+    if format == 'fiber_tools':
+        from scipy.io import loadmat
+        import nibabel.trackvis
+        all_data = loadmat(file)
+        fib_data = all_data['curveSegCell']
+        aff = all_data['hMatrix']
+        my_data = dict()
+        my_header = nibabel.trackvis.empty_header()
+        nibabel.trackvis.aff_to_hdr(aff, my_header)
+        for idx, fiber in enumerate(fib_data):
+            my_data[idx] = {'vertices_vox': fiber[0][:,[1,0,2]]}
+        return TNFibers(data=my_data, format='trackvis', header=my_header, spacing='vox')
+    # MITK
+    if format == 'mitk':
+        import numpy as np
+        # create our new data structures
+        import nibabel.trackvis        
+        my_data = dict()
+        my_header = nibabel.trackvis.empty_header()
+        streamline_idx = 0
+        # setup for vtk parsing
+        import vtk                
+        reader=vtk.vtkPolyDataReader()
+        reader.SetFileName(file)
+        reader.Update()
+        lines = reader.GetOutput().GetLines()
+        points = reader.GetOutput().GetPoints()
+        ptr = vtk.vtkIdList()
+        lines.InitTraversal()
+        while lines.GetNextCell(ptr):
+            vertices = list()
+            for i in range(0,ptr.GetNumberOfIds()):
+                vertices.append(points.GetPoint(ptr.GetId(i)))
+            my_data[streamline_idx] = {'vertices_vox':
+                                       np.asarray(vertices, dtype=np.float32)}
+            streamline_idx += 1
+        return TNFibers(data=my_data, format='trackvis', header=my_header, spacing='vox')
+                
+        
+
 
 def sum_of_inverse_fiber_lengths(roi_img, endpoints, lengths):
     """For a given ROI atlas and set of fibers, return an adjacency
@@ -351,4 +435,3 @@ def sum_of_inverse_fiber_lengths(roi_img, endpoints, lengths):
             print e
             raise
     return result
-
