@@ -49,6 +49,49 @@ class TNConnectome(networkx.Graph):
             print e
             return None
 
+    def matrix_for_key(self, key, force_symmetric=True,
+                       binarize=False, number_of_nodes=None,
+                       zero_diagonal=True):
+        """Return a NxN matrix for given connectome and key. The
+        connection matrix is returned as a numpy ndarray.
+
+        """
+        ##TODO: Add functionality for fixed desnity
+        # create our new shiny connection matrix
+        import numpy
+        if number_of_nodes is None:
+            n = max(self.nodes())
+        else:
+            n = number_of_nodes
+        new_cmat = numpy.zeros((n,n))
+
+        # extract the value for key for every edge in the given connectome
+        for i,j in self.edges_iter():
+            new_cmat[i-1][j-1] = self[i][j][key]
+                
+        # do we need to do anything regarding symmetry?
+        if force_symmetric and (new_cmat - new_cmat.T != 0).any():
+            #...if one-sided (no information below diagonal)
+            if (numpy.tril(new_cmat,-1) == 0).all():
+                # project above diagonal onto below diagonal
+                new_cmat += numpy.tril(new_cmat.T, -1)
+                #...else, we will assume two-sided unequal
+            else:
+                # our solution will be to take the mean of each pair of
+                # reflected indices
+                new_cmat = (new_cmat + new_cmat.T ) / 2.0
+
+        # if we need to binarize...
+        if binarize:
+            new_cmat = new_cmat >= 1
+
+        # if we need to zero diagonal...
+        if zero_diagonal:
+            numpy.fill_diagonal(new_cmat,0)
+
+        # return the cmat
+        return new_cmat
+    
     def node_observations_for_key(self, key, include_info=True, node_name_key=None):
         """Return record for a given key in the form of a dictionary.
 
