@@ -156,7 +156,17 @@ class TNConnectome(networkx.Graph):
         # get surface areas for ROIs
         import images
         surface_area = images.surface_area_for_rois(ROI_img, WM_img)
-
+        # make sure our surface areas are well formed, this means an
+        # entry for every key
+        epsilon = 0.00000000001
+        for n in self.nodes():
+            try:
+                surface_area[n]
+            except KeyError:
+                surface_area[n] = epsilon
+            except Exception as e:
+                raise e
+                
         # for every edge...
         for i,j in self.edges_iter():
             calc_hd = ( ( 2.0 / ( surface_area[i] + surface_area[j] ) ) * \
