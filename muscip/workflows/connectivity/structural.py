@@ -355,7 +355,7 @@ def create_tractography(name='tractography'):
     tracker = pe.Node(interface=dtk.dti.DTITracker(), name='tracker')
     tracker.inputs.input_type = 'nii.gz'
     tracker.inputs.random_seed = 32
-    tracker.inputs.mask1_threshold = 0.2
+    tracker.inputs.mask1_threshold = 0.1
     tracker.inputs.output_file = 'streamline.trk'
     tracker.inputs.output_mask = 'wm_mask.nii.gz'
     this_workflow.connect(recon, 'FA', tracker, 'mask1_file')
