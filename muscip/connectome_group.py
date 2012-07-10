@@ -31,6 +31,46 @@ class TNConnectomeGroup(object):
         except Exception as e:
             raise e
 
+    def dataFrame(self, info_keys=None, metric_keys=None, number_of_nodes=None):
+        try:
+            df = dict()
+            import numpy as np
+
+            # if info keys is none...assume we want them all
+            if not info_keys:
+                info_keys = list()
+                for C in self.connectomes():
+                    try:
+                        for key in C.graph['info'].keys():
+                            if key not in info_keys:
+                                info_keys.append(key)
+                    except Exception as e:
+                        raise e
+                    
+            for C in self.connectomes():
+                for key in info_keys:
+                    try:
+                        if key not in df.keys():
+                            df[key] = list()
+                        df[key].append(C.graph['info'][key])
+                    except KeyError:
+                        continue
+                    except Exception as e:
+                        raise e
+                for key in metric_keys:
+                    try:
+                        if key not in df.keys():
+                            df[key] = list()
+                        df[key].append(C.matrix_for_key(key))
+                    except KeyError:
+                        continue
+                    except Exception as e:
+                        raise e
+            import pandas
+            return pandas.DataFrame(df)
+        except Exception as e:
+            raise e
+        
     def visualize_adj_matrix(self,
                              function=None,
                              group_key=None,
@@ -38,37 +78,46 @@ class TNConnectomeGroup(object):
                              number_of_nodes=None,
                              zero_diagonal=True,
                              binarize=False,
-                             fixed_density=None,
+                             fixed_density=None
     ):
-        try:
-            import numpy as np
-            # create an empty numpy array to hold all matrices
-            stack = np.zeros((len(self.subjects), number_of_nodes,
-                              number_of_nodes))
-            # get a count of groups
-            groups = dict()
-            for idx, C in enumerate(self.connectomes()):
-                group = C.graph['info'][group_key]
-                if group not in groups.keys():
-                    groups[group] = [idx]
-                else:
-                    groups[group].append(idx)
-                stack[idx,:,:] = C.matrix_for_key(metric_key,
-                                                  binarize=binarize,
-                                                  number_of_nodes=number_of_nodes,
-                                                  zero_diagonal=zero_diagonal)
-            # generate the result
-            submatrices = list()
-            for key in groups.keys():
-                print key, groups[key]
-                print stack[groups[key],:,:].shape
-                submatrices.append(stack[groups[key],:,:].reshape((len(stack[groups[key]]),
-                                                                   number_of_nodes ** 2)))
-            result = apply(function, submatrices) #.reshape((number_of_nodes, number_of_nodes))
-            print result
-            # display the result
-            from matplotlib.pyplot import imshow
-            imshow(result, interpolation='nearest')
+        pass
 
-        except Exception as e:
-            raise e
+    def set_info(self, csvfile, id_key, new_filename=None):
+        
+            import os.path as op
+            from copy import copy
+            # create the csv reader and grab data
+            try:
+                import csv
+                read_info = dict()
+                f = open(op.abspath(csvfile), 'rt')
+                reader = csv.DictReader(f)
+                for record in reader:
+                    read_info[record[id_key]] = record
+            except Exception, e:
+                print e
+            finally:
+                f.close()
+            # for every connectome entry, try and get info from the info we
+            # previously read
+            for idx, C in enumerate(self.connectomes()):
+                # try to get info for subject
+                try:
+                    subject = self.subjects[idx]
+                    new_info = read_info[subject]
+                except KeyError:
+                    print "No info found in csv file for: %s" % subject
+                    continue
+                # apply new info
+                C.set_info(new_info)
+                # try to save connectome
+                try:
+                    if new_filename:
+                        outpath = op.join(self.subject_dir, subject,
+                                          op.dirname(self.connectome_path),
+                                          new_filename)
+                    else:
+                        outpath = op.join(self.subject_dir, subject, self.connectome_path)
+                    C.write(outpath)
+                except Exception, e:
+                    print "Could not save connectome file -- %s" % e
