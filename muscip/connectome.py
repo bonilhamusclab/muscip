@@ -222,7 +222,7 @@ class TNConnectome(networkx.Graph):
         except Exception, e:
             print e
         
-    def write_fibers(self, filename):
+    def write_fibers(self, filename, fibers=None):
         """Write fibers as trackvis file to the give filename.
 
         Inputs::
@@ -231,14 +231,22 @@ class TNConnectome(networkx.Graph):
         
         """
         try:
-            streamlines = []
+            # get fiber data if we need
+            fiber_header = None
+            if fibers:
+                if type(fibers) == str:
+                    import muscip.fibers as fib
+                    fibers = fib.read(fibers)
+                fiber_data = fibers.get_data()
+                fiber_header = fibers.get_header()
+            streamlines = dict()
             for i,j in self.edges_iter():
                 for streamline in self[i][j]['streamlines']:
-                    streamlines.append(streamline)
+                    streamlines[streamline] = fiber_data
             from nibabel.trackvis import TrackvisFile
-            TrackvisFile(streamlines).to_file(filename)
+            TrackvisFile(streamlines, mapping=fiber_header).to_file(filename)
         except Exception, e:
-            print e
+            raise e
 
 # MODULE LEVEL FUNCTIONS
 def add_info_to_connectomes_from_csv(connectomes,
