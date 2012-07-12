@@ -1,10 +1,12 @@
 import networkx
+import numpy
 
 class TNConnectome(networkx.Graph):
     """Connectome as defined by me!"""
 
     def __init__(self):
         networkx.Graph.__init__(self)
+        self.graph['dwi_to_roi_affine'] = numpy.eye(4)
 
     def edge_observations_for_key(self, key, include_info=True, node_name_key=None):
         """Return record for a given key in the form of a dictionary.
@@ -197,7 +199,18 @@ class TNConnectome(networkx.Graph):
         for label, data in node_info.nodes_iter(data=True):
             self.add_node(int(label), data)
             self.node[int(label)]['subject_position'] = tuple( np.mean ( np.where ( ROI_img_data == int(label) ), axis=1 ) )
-        
+
+    def remove_self_loops(self):
+        """Remove node[a] to node[a] connections, or self-loops from
+        the connectome. This done in a destructive manner.
+
+        """
+        for n in self.nodes_iter():
+            try:
+                self.remove_edge(n,n)
+            except:
+                continue
+            
     def set_info(self, info):
         """Set info for connectome. This will add a info dictionary
         and provided keys/values to the connectome.
@@ -240,11 +253,12 @@ class TNConnectome(networkx.Graph):
                 fiber_data = fibers.get_data()
                 fiber_header = fibers.get_header()
             streamlines = dict()
-            for i,j in self.edges_iter():
-                for streamline in self[i][j]['streamlines']:
-                    streamlines[streamline] = fiber_data
-            from nibabel.trackvis import TrackvisFile
-            TrackvisFile(streamlines, mapping=fiber_header).to_file(filename)
+            def iter_streamlines():
+                for i,j in self.edges_iter():
+                    for streamline_idx in self[i][j]['streamlines']:
+                        yield (fiber_data[streamline_idx]['vertices_mm'], None, None)
+            from nibabel import trackvis
+            trackvis.write(filename, iter_streamlines(), hdr_mapping=fiber_header)
         except Exception, e:
             raise e
 
@@ -383,45 +397,86 @@ def edge_data_for_connectomes_as_df(C_list, edge_data_key, filename,
     finally:
         fout.close()
     
-def generate_connectome(fib, roi_img, node_info=None):
-    """Return a TNConnectome object
+def generate_connectome(fib, roi_img,
+                        node_info=None,
+                        affine=None,
+                        min_length=None):
+    """Return a TNConnectome object that contains fibers that both
+    start and terminate in unique regions of interest as defined by
+    the roi image. The roi image should contain unique, non-zero,
+    label-like values for each voxel belonging to a region of
+    interest.
 
     Example
     -------
-    import tn_image_processing as tnip
+    import muscip
     import nibabel
-    fibers = tnip.fibers.read('path/to/track.trk')
+    fibers = muscip.fibers.read('path/to/track.trk')
     roi = nibabel.load('path/to/roi.nii.gz')
-    C = tnip.connectome.generate_connectome(fibers, roi)
+    fs_atlas = muscip.atlas.freesurfer.Freesurfer()
+    C = muscip.connectome.generate_connectome(
+                                              fibers,
+                                              roi,
+                                              node_info=fs_atlas.node_info(),
+                                              affine='path/to/inv/xform/matrix',
+                                              min_length=5
+                                             )
 
     Input::
 
       [mandatory]
-      fibers - a loaded fiber object from
-               tn_image_processing.fibers
-      roi_img - a loaded nibabel image
+
+        fibers: a loaded fiber object from tn_image_processing.fibers
+
+        roi_img: a loaded nibabel image
+
+      [optional]
+
+        node_info: a dictionary containing information associated with
+                   node labels
+
+        affine: affine transform from fib to roi space; if not
+                provided, it is assumed that roi and fib are in same
+                space... this will commonly be the inverse of the
+                transformation matrix generated with flirt, while
+                co-registering the ROI image to diffusion space.
+
+        min_length: minimum length in terms of voxel coordinates
+                    (after affine transform if applicable)
 
     """
     import os, fibers
 
     # create connectome object and store initializing properties
     connectome = TNConnectome()
-    connectome.graph['roi_img'] = os.path.abspath(roi_img.get_filename())
+    connectome.graph['roi_affine'] = roi_img.get_affine()
+    connectome.graph['roi_data'] = roi_img.get_data()
+    connectome.graph['fib_affine'] = fib.get_affine()
+    tmp_streamlines = list()
+
+    if affine:
+        connectome.graph['dwi_to_roi_affine'] = affine
     # get ROI data
-    roi_data = roi_img.get_data()
+    roi_data = connectome.graph['roi_data']
     # load node info if provided
     if node_info:
         connectome.populate_node_info(roi_data, node_info)
-    # get our vertex key - we will use voxel spacing to determine
-    # intersection of ROIs, we are assuming that ROI atlas is in same
-    # space as diffusion, as is best practice
+    # use vertices vox so that we can relate diffusion to roi space by
+    # affine if needed, this will be the only spacing we store
     vertex_key = 'vertices_vox'
-    # TODO: should write an interater so that we don't need to load
+    # TODO: should write an iterater so that we don't need to load
     # all of this into memory
     streamlines = fib.get_data()
+    # if an affine was provided, apply to every streamline in
+    # streamlines...
+    if affine:
+        for streamline in streamlines:
+            for idx, point in enumerate(streamlines[streamline][vertex_key]):
+                x,y,z = point
+                ##TODO: finish imp!
     for streamline in streamlines:
         # get the endpoints of streamline in terms of voxel indices
-        vertex_i = streamlines[streamline][vertex_key][0]
+        vertex_i = streamlines[streamline][vertex_key][0] 
         vertex_j = streamlines[streamline][vertex_key][-1]
         voxel_i = [int(vertex_i[0]), int(vertex_i[1]),
                    int(vertex_i[2])]

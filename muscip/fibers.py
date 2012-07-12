@@ -6,17 +6,25 @@ class TNFibers(object):
                  data = None,
                  format = 'trackvis',
                  header = None,
-                 spacing = 'mm'
+                 spacing = 'vox'
     ):
         self.data = data
         self.format = format
         self.set_header(header)
         self.set_spacing(spacing)
         self._load_alternative_spacings()
-        
+
+    def get_affine(self):
+        if self.format == 'trackvis':
+            return self.get_value_for_header_key('vox_to_ras')
+        # format not handled, return None
+        return None
+
     def get_data(self):
         if self.format == 'trackvis':
             return self.data
+        # format not handled, return None            
+        return None
 
     def get_dim(self):
         return self.get_value_for_header_key('dim')
