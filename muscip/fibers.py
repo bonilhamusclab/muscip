@@ -3,25 +3,33 @@ class TNFibers(object):
     """Container class for fibers"""
 
     def __init__(self,
-                 data = None,
+                 streamlines = None,
                  format = 'trackvis',
                  header = None,
-                 spacing = 'mm'
+                 voxel_size = None,
+                 affine = None
     ):
-        self.data = data
-        self.format = format
-        self.set_header(header)
-        self.set_spacing(spacing)
-        self._load_alternative_spacings()
-        
-    def get_data(self):
-        if self.format == 'trackvis':
-            return self.data
+        if header is not None:
+            self.load_header(header, self.format)
+        if format == 'trackvis':
+            self.set_spacing('voxmm')
+        if format == 'mitk':
+            self.set_spacing('voxel')
+        if format == 'fiber_tools':
+            self.set_spacing('voxel')
+        if voxel_size is not None:
+            self.set_voxel_size(voxel_size)
+        if affine is not None:
+            self.set_affine(affine)
+        self.load_streamlines(streamlines, format)
 
+    def get_affine(self):
+        return self.affine
+        
     def get_dim(self):
         return self.get_value_for_header_key('dim')
     
-    def get_header(self):
+    def get_header(self, format=None):
         return self.header
         
     def get_spacing(self):
@@ -45,7 +53,7 @@ class TNFibers(object):
     def set_dims(self,x,y,z):
         self.set_value_for_header_key('dim',[x,y,z])
         
-    def set_header(self, header):
+    def load_header(self, header):
         if not header:
             self.header = None
             return
@@ -96,23 +104,6 @@ class TNFibers(object):
             else:
                 nibabel.trackvis.write(filename, self.streamlines(), point_space=ps)
                 
-    def _load_alternative_spacings(self):
-        """Populate the data with both voxel and mm based spacing
-        values.
-
-        The outcome is that within data, there will be keys for
-        both.
-
-        """
-        voxel_size = self.get_voxel_size()
-        if voxel_size is not None:
-            if not self.data[0].has_key('vertices_vox'):
-                for idx in self.data:
-                    self.data[idx]['vertices_vox'] = self.data[idx]['vertices_mm'] / voxel_size
-            if not self.data[0].has_key('vertices_mm'):
-                for idx in self.data:
-                    self.data[idx]['vertices_mm'] = self.data[idx]['vertices_vox'] * voxel_size
-        
     def _trackvis_header_fields(self):
         return {
             'id_string': 0,
@@ -145,42 +136,6 @@ class TNFibers(object):
 ################################################################################        
 # Module Level Functions -------------------------------------------------------
 ################################################################################
-
-def cmat_for_key(connectome, key, number_of_nodes=None,
-                 force_symmetric=True):
-    """Return a N x N connection matrix for given connectome and
-    key. The connection matrix is returned as a numpy ndarray.
-
-    """
-
-    # create our new shiny connection matrix
-    import numpy
-    if number_of_nodes is None:
-        n = max(connectome.nodes())
-    else:
-        n = number_of_nodes
-    new_cmat = numpy.zeros((n,n))
-
-    # extract the value for key for every edge in the given connectome
-    for i,j in connectome.edges_iter():
-        new_cmat[i-1][j-1] = connectome[i][j][key]
-        
-    # do we need to do anything regarding symmetry?
-    if force_symmetric and (new_cmat - new_cmat.T != 0).any():
-        #...if one-sided (no information below diagonal)
-        if (numpy.tril(new_cmat,-1) == 0).all():
-            # project above diagonal onto below diagonal
-            new_cmat += numpy.tril(new_cmat.T, -1)
-        #...else, we will assume two-sided unequal
-        else:
-            # our solution will be to take the mean of each pair of
-            # reflected indices
-            new_cmat = (new_cmat + new_cmat.T ) / 2.0
-
-    # return the cmat
-    return new_cmat
-        
-    
 def extract_hagmann_density(connectome, roi_img, wm_img):
     """Populate hagmann density for given connectome"""
 
@@ -200,7 +155,6 @@ def extract_hagmann_density(connectome, roi_img, wm_img):
         calc_hd = ( ( 2.0 / ( surface_area[i] + surface_area[j] ) ) * \
                   inverse_sum( connectome[i][j]['streamlines_length'] ) )
         connectome[i][j]['hagmann_density'] = calc_hd
-    
     
 def extract_scalars(fibers, connectome, scalar_img, scalar_name, scale_factor=[1.,1.,1.]):
     """Extract scalar values for given fiber, img combination, and add
@@ -257,66 +211,6 @@ def extract_scalars(fibers, connectome, scalar_img, scalar_name, scale_factor=[1
     # return updated connectome
     return connectome
     
-def generate_connectome(fibers, roi_img):
-    """Return connectome as a networkx object"""
-    import networkx
-    # create empty graph
-    connectome = networkx.Graph()
-    from os.path import abspath
-    connectome.graph['roi_img'] = abspath(roi_img.get_filename())
-    # get our ROI data
-    roi_data = roi_img.get_data()
-    # get our vertex key
-    if fibers.get_spacing() == 'mm':
-        vertex_key = 'vertices_mm'
-    elif fibers.get_spacing() == 'vox':
-        vertex_key = 'vertices_vox'
-    # TODO: should write an interater so that we don't need to load
-    # all of this into memory
-    streamlines = fibers.get_data()
-    for streamline in streamlines:
-        # get the endpoints of streamline in terms of voxel indices
-        vertex_i = streamlines[streamline][vertex_key][0]
-        vertex_j = streamlines[streamline][vertex_key][-1]
-        voxel_i = [int(vertex_i[0]), int(vertex_i[1]),
-                   int(vertex_i[2])]
-        voxel_j = [int(vertex_j[0]), int(vertex_j[1]),
-                   int(vertex_j[2])]
-        # try and get value for voxel indices from roi data (it is
-        # possible that we are outside of the bounds of the ROI, due
-        # to the propegation of the tracks beyond the bounds of ROI
-        # image in tracking)
-        try:
-            label_i = roi_data[tuple(voxel_i)]
-            label_j = roi_data[tuple(voxel_j)]
-        except IndexError:
-            continue
-        # if both endpoints reside in ROIs (both endpoints are
-        # non-zero)...
-        if label_i != 0 and label_j != 0:
-            # ...then we need to add to the fiber count for the
-            # specified edge
-            try:
-                connectome[label_i][label_j]['number_of_fibers'] += 1
-                connectome[label_i][label_j]['streamlines'].append(streamline)
-                connectome[label_i][label_j]['streamlines_length'].append(
-                    length_of_streamline(streamlines[streamline]))
-            # handle the case where the edge does not yet exist
-            except KeyError:
-                connectome.add_edge(label_i, label_j)
-                connectome[label_i][label_j]['number_of_fibers'] = 1
-                connectome[label_i][label_j]['streamlines'] = [streamline]
-                connectome[label_i][label_j]['streamlines_length'] = [length_of_streamline(streamlines[streamline])]
-
-    # calculate and store mean fiber lengths and std
-    import numpy
-    for i,j in connectome.edges_iter():
-        connectome[i][j]['fiber_length_mean'] = numpy.asarray(connectome[i][j]['streamlines_length']).mean()
-        connectome[i][j]['fiber_length_std'] = numpy.asarray(connectome[i][j]['streamlines_length']).std()
-
-    # return our results
-    return connectome
-    
 def length_of_streamline(streamline, vox_dims=[1.,1.,1.]):
     """Return the length of streamline as determined by it's
     vertices
@@ -371,7 +265,6 @@ def read(file, format='trackvis'):
         import nibabel.trackvis        
         my_data = dict()
         my_header = nibabel.trackvis.empty_header()
-        streamline_idx = 0
         # setup for vtk parsing
         import vtk                
         reader=vtk.vtkPolyDataReader()
@@ -381,17 +274,13 @@ def read(file, format='trackvis'):
         points = reader.GetOutput().GetPoints()
         ptr = vtk.vtkIdList()
         lines.InitTraversal()
-        while lines.GetNextCell(ptr):
-            vertices = list()
-            for i in range(0,ptr.GetNumberOfIds()):
-                vertices.append(points.GetPoint(ptr.GetId(i)))
-            my_data[streamline_idx] = {'vertices_vox':
-                                       np.asarray(vertices, dtype=np.float32)}
-            streamline_idx += 1
-        return TNFibers(data=my_data, format='trackvis', header=my_header, spacing='vox')
-                
-        
-
+        def read_streamlines():
+            while lines.GetNextCell(ptr):
+                vertices = list()
+                for i in range(0,ptr.GetNumberOfIds()):
+                    vertices.append(points.GetPoint(ptr.GetId(i)))
+                    yield np.asarray(vertices, dtype=np.float32)
+        return TNFibers(streamlines=read_streamines(), header=my_header, spacing='vox')
 
 def sum_of_inverse_fiber_lengths(roi_img, endpoints, lengths):
     """For a given ROI atlas and set of fibers, return an adjacency
