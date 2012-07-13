@@ -332,7 +332,7 @@ def length_of_streamline(streamline, vox_dims=[1.,1.,1.]):
     '"""
     segments = []
     idx = 0
-    vertices = streamline['vertices_mm']
+    vertices = streamline
     while idx < len(vertices) - 1:
         start = vertices[idx]
         end = vertices[idx+1]

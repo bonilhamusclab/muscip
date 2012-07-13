@@ -1,12 +1,13 @@
 import networkx
-import numpy
+import numpy as np
 
 class TNConnectome(networkx.Graph):
     """Connectome as defined by me!"""
 
     def __init__(self):
         networkx.Graph.__init__(self)
-        self.graph['dwi_to_roi_affine'] = numpy.eye(4)
+        self.graph['dwi_to_roi_affine'] = np.eye(4)
+        self.graph['wm_to_roi_affine'] = np.eye(4)
 
     def edge_observations_for_key(self, key, include_info=True, node_name_key=None):
         """Return record for a given key in the form of a dictionary.
@@ -451,37 +452,45 @@ def generate_connectome(fib, roi_img,
     connectome = TNConnectome()
     connectome.graph['roi_affine'] = roi_img.get_affine()
     connectome.graph['roi_data'] = roi_img.get_data()
-    connectome.graph['fib_affine'] = fib.get_affine()
-    tmp_streamlines = list()
-
-    if affine:
+    connectome.graph['fiber_affine'] = fib.get_affine()
+    connectome.graph['fibers'] = dict()
+    if affine is not None:
         connectome.graph['dwi_to_roi_affine'] = affine
     # get ROI data
     roi_data = connectome.graph['roi_data']
     # load node info if provided
-    if node_info:
+    if node_info is not None:
         connectome.populate_node_info(roi_data, node_info)
-    # use vertices vox so that we can relate diffusion to roi space by
-    # affine if needed, this will be the only spacing we store
+    # iterate through streamlines in fiber data and place every
+    # streamline into connectome...  use vertices vox so that we can
+    # relate diffusion to roi space by affine if needed, this will be
+    # the only spacing we store
     vertex_key = 'vertices_vox'
-    # TODO: should write an iterater so that we don't need to load
-    # all of this into memory
     streamlines = fib.get_data()
-    # if an affine was provided, apply to every streamline in
-    # streamlines...
-    if affine:
-        for streamline in streamlines:
-            for idx, point in enumerate(streamlines[streamline][vertex_key]):
-                x,y,z = point
-                ##TODO: finish imp!
+    for streamline_idx in streamlines:
+        orig_streamline = streamlines[streamline_idx][vertex_key]
+        if affine is None:
+            connectome.graph['fibers'][streamline_idx] = orig_streamline
+        # if an affine was provided we need to convert every point in
+        # the streamline
+        else:
+            new_streamline = list()
+            for orig_point in orig_streamline:
+                x0,y0,z0 = orig_point
+                x1,y1,z1,_ = np.asarray(np.matrix(affine)*np.matrix([x0,y0,z0,1]).T).flatten()
+                new_streamline.append([x1,y1,z1])
+            connectome.graph['fibers'][streamline_idx] = new_streamline
+    streamlines = connectome.graph['fibers'] # update our pointer
     for streamline in streamlines:
         # get the endpoints of streamline in terms of voxel indices
-        vertex_i = streamlines[streamline][vertex_key][0] 
-        vertex_j = streamlines[streamline][vertex_key][-1]
-        voxel_i = [int(vertex_i[0]), int(vertex_i[1]),
-                   int(vertex_i[2])]
-        voxel_j = [int(vertex_j[0]), int(vertex_j[1]),
-                   int(vertex_j[2])]
+        if affine is not None:
+            x0,y0,z0 = streamlines[streamline][0] 
+            x1,y1,z1 = streamlines[streamline][-1]
+        else:
+            x0,y0,z0 = _apply_affine_to_point(affine, streamlines[streamline][0])
+            x1,y1,z1 = _apply_affine_to_point(affine, streamlines[streamline][-1])
+        voxel_i = [int(x0), int(y0), int(z0)]
+        voxel_j = [int(x1), int(y1), int(z1)]
         # try and get value for voxel indices from roi data (it is
         # possible that we are outside of the bounds of the ROI, due
         # to the propegation of the tracks beyond the bounds of ROI
@@ -533,3 +542,11 @@ def read_gpickle(filename):
     for i,j,data in read_graph.edges_iter(data=True):
         connectome.add_edge(i,j,data)
     return connectome
+
+def _apply_affine_to_point(affine, point):
+    try:
+        x0,y0,z0 = point
+        x1,y1,z1,_ = np.asarray(np.matrix(affine)*np.matrix([x0,y0,z0,1]).T).flatten()
+        return [x1,y1,z1]
+    except Exception, e:
+        raise e
