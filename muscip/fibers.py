@@ -1,215 +1,124 @@
+from table import *
 
 class TNFibers(object):
     """Container class for fibers"""
 
     def __init__(self,
+                 affine = None,
+                 dims = None,
+                 spacing = None,
                  streamlines = None,
-                 format = 'trackvis',
-                 header = None,
-                 voxel_size = None,
-                 affine = None
+                 voxel_size = None
     ):
-        if header is not None:
-            self.load_header(header, self.format)
-        if format == 'trackvis':
-            self.set_spacing('voxmm')
-        if format == 'mitk':
-            self.set_spacing('voxel')
-        if format == 'fiber_tools':
-            self.set_spacing('voxel')
-        if voxel_size is not None:
-            self.set_voxel_size(voxel_size)
-        if affine is not None:
-            self.set_affine(affine)
-        self.load_streamlines(streamlines, format)
+        # create an hdf5 table in a temp directory
+        self.set_affine(affine)
+        self.set_dims(dims)
+        self.set_spacing(spacing)
+        self.set_voxel_size(voxel_size)
+        self.load_streamlines(streamlines)
 
-    def get_affine(self):
-        return self.affine
-        
-    def get_dim(self):
-        return self.get_value_for_header_key('dim')
-    
-    def get_header(self, format=None):
-        return self.header
-        
-    def get_spacing(self):
-        return self._spacing
-        
-    def get_voxel_size(self):
-        if self.format == 'trackvis':
-            if self.header is not None:
-                return self.get_value_for_header_key('voxel_size')
-
-    def get_value_for_header_key(self, key):
-        if not self.header:
+    @property
+    def affine(self):
+        try:
+            return self._affine
+        except:
             return None
-        if self.format == 'trackvis':
-            try:
-                return self.header[key]
-            except:
-                return None
+
+    @property
+    def dims(self):
+        try:
+            return self._dims
+        except:
+            return None
+
+    @property
+    def spacing(self):
+        try:
+            return self._spacing
+        except:
+            return None
+
+    @property
+    def streamlines(self):
+        ##TODO: implement streamlines generator
         return None
 
-    def set_dims(self,x,y,z):
-        self.set_value_for_header_key('dim',[x,y,z])
-        
-    def load_header(self, header):
-        if not header:
-            self.header = None
-            return
-        if hasattr(header, 'flags.writeable'):
-            header.flags.writeable = True
-        self.header = header
-
-    def set_spacing(self, new_spacing):
-        accepted_spacing = ['mm', 'vox']
-        if new_spacing not in accepted_spacing:
-            print "%s is not an accepted spacing" % new_spacing
-        if new_spacing == 'mm':
-            if self.format == 'trackvis':
-                self._vertex_key = 'vertices_mm'
-        if new_spacing == 'vox':
-            if self.format == 'trackvis':
-                self._vertex_key = 'vertices_vox'
-        self._spacing = new_spacing
-
-    def set_value_for_header_key(self, key, value):
-        if not self.header:
+    @property
+    def voxel_size(self):
+        try:
+            return self._voxel_size
+        except:
             return None
-        if self.format == 'trackvis':
-            try:
-                self.header[key] = value
-            except Exception as e:
-                raise e
-            
-    def set_voxel_size(self,x,y,z):
-        self.set_value_for_header_key('voxel_size',[x,y,z])
-        
-    def streamlines(self):
-        result = list()
-        for fiber_key, fiber in self.get_data().items():
-            result.append((fiber[self._vertex_key],None,None))
-        return result
 
-    def write(self, filename):
-        if self.format == 'trackvis':
-            import nibabel.trackvis
-            if self.get_spacing == 'vox':
-                ps = 'voxel'
+    @affine.setter
+    def affine(self, new_affine):
+        try:
+            from numpy import asarray
+            new_value = asarray(new_affine)
+            if new_value.shape == (4,4):
+                self._affine = new_value
             else:
-                ps = None
-            if self.header is not None:
-                nibabel.trackvis.write(filename, self.streamlines(),
-                                       hdr_mapping=self.header, points_space=ps)
+                raise Exception("Affine should be a 4x4 matrix, but instead was %s" % new_value.shape)
+        except Exception, e:
+            raise e
+
+    @dims.setter
+    def dims(self, new_dims):
+        try:
+            from numpy import asarray
+            new_value = asarray(new_dims)
+            if new_value.shape == (1,3):
+                self._dims = new_value
             else:
-                nibabel.trackvis.write(filename, self.streamlines(), point_space=ps)
+                raise Exception("Dims should be a 1x3 matrix, but instead was %s" % new_value.shape)
+        except Exception, e:
+            raise e
+
+    @spacing.setter
+    def spacing(self, new_spacing):
+        try:
+            accepted_spacings = ['voxel', 'voxelmm', 'rasmm']
+            if new_spacing in accepted_spacings:
+                self._spacing = new_spacing
+            else:
+                raise Exception("Valid spacing options include: %s, but %s was provided."
+                                % (accepted_spacings, new_spacing))
+        except Exception, e:
+            raise e
+
+    @voxel_size.setter
+    def voxel_size(self, new_voxel_size):
+        try:
+            from numpy import asmatrix
+            new_value = asmatrix(new_voxel_size)
+            if new_value.shape == (1,1):
+                self._voxel_size = new_value * [1,1,1]
+            if new_value.shape == (1,3):
+                self._voxel_size = new_value
+            else:
+                raise Exception("Voxel size must be provided as a 1x1 or 1x3 matrix, not %s." %
+                                new_value.shape)
+        except Exception, e:
+            raise e
+        
+    def length_of_streamline(self, streamline_key):
+        ##TODO: impolement length of streamline
+        pass
+        
+    def write(self, filename, format='trackvis'):
+        if format == 'trackvis':
+            ##TODO: implement trackvis write
+            pass
+        if format == 'fib'
+           ##TODO: implement fib write
                 
-    def _trackvis_header_fields(self):
-        return {
-            'id_string': 0,
-            'dim': 1,
-            'voxel_size': 2,
-            'origin': 3,
-            'n_scalars': 4,
-            'scalar_name': 5,
-            'n_properties': 6,
-            'property_name': 7,
-            'vox_to_ras': 8,
-            'reserved': 9,
-            'voxel_order': 10,
-            'pad2': 11,
-            'image_orientation_patient': 12,
-            'pad1': 13,
-            'invert_x': 14,
-            'invert_y': 15,
-            'invert_z': 16,
-            'swap_xy': 17,
-            'sway_yz': 18,
-            'swap_zx': 19,
-            'n_count': 20,
-            'version': 21,
-            'hdr_size': 22
-        }
-                
+    def _trackvis_header(self):
+        
 
         
 ################################################################################        
 # Module Level Functions -------------------------------------------------------
 ################################################################################
-def extract_hagmann_density(connectome, roi_img, wm_img):
-    """Populate hagmann density for given connectome"""
-
-    def inverse_sum(elements):
-        inverse_elements = []
-        for element in elements:
-            inverse_elements.append( 1.0 / element )
-        from math import fsum
-        return fsum(inverse_elements)
-
-    # get surface areas for ROIs
-    import images
-    surface_area = images.surface_area_for_rois(roi_img, wm_img)
-
-    # for every edge...
-    for i,j in connectome.edges_iter():
-        calc_hd = ( ( 2.0 / ( surface_area[i] + surface_area[j] ) ) * \
-                  inverse_sum( connectome[i][j]['streamlines_length'] ) )
-        connectome[i][j]['hagmann_density'] = calc_hd
-    
-def extract_scalars(fibers, connectome, scalar_img, scalar_name, scale_factor=[1.,1.,1.]):
-    """Extract scalar values for given fiber, img combination, and add
-    to connectome.
-
-    Return copy of updated connectome.
-
-    """
-    import numpy # we will need this for mean, std over arrays
-
-    # get scalar img data
-    scalar_data = scalar_img.get_data()
-
-    # get vertex key
-    if fibers.get_spacing() == 'mm':
-        vertex_key = 'vertices_mm'
-    elif fibers.get_spacing() == 'vox':
-        vertex_key = 'vertices_vox'
-
-    # generate out keys
-    mean_key = "%s_mean" % scalar_name
-    std_key = "%s_std" % scalar_name
-
-    # record image path in connectome
-    from os.path import abspath
-    connectome.graph['%s_img' % scalar_name] = abspath(scalar_img.get_filename())
-
-    # get streamlines
-    streamlines = fibers.get_data()
-    # for every edge in our connectome...
-    for i,j in connectome.edges_iter():
-        # start a new collection
-        collected_values = []
-        # for every streamline belonging to edge...
-        for streamline in connectome[i][j]['streamlines']:
-            # for every vertex belonging to streamline
-            for vertex in streamlines[streamline][vertex_key]:
-                voxel = [int(vertex[0] / scale_factor[0]),
-                         int(vertex[1] / scale_factor[1]),
-                         int(vertex[2] / scale_factor[2])]
-                # try to get value for voxel (it is possible it is out
-                # of bounds)
-                try:
-                    value = scalar_data[tuple(voxel)]
-                except IndexError:
-                    continue
-                collected_values.append(value)
-
-        # calculate aggregate values and write to connectom
-        collected_values_as_array = numpy.asarray(collected_values)
-        connectome[i][j][mean_key] = collected_values_as_array.mean()
-        connectome[i][j][std_key] = collected_values_as_array.std()
-
-    # return updated connectome
-    return connectome
     
 def length_of_streamline(streamline, vox_dims=[1.,1.,1.]):
     """Return the length of streamline as determined by it's
