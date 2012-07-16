@@ -1,4 +1,4 @@
-from table import *
+import tables
 
 class TNFibers(object):
     """Container class for fibers"""
@@ -6,47 +6,86 @@ class TNFibers(object):
     def __init__(self,
                  affine = None,
                  dims = None,
-                 spacing = None,
+                 h5_file = None,
+                 spacing = 'voxel',
                  streamlines = None,
                  voxel_size = None
     ):
-        # create an hdf5 table in a temp directory
+        if h5_file is None:
+            self._create_h5_file()
+        else:
+            self._load_h5_file(h5_file)
         self.set_affine(affine)
         self.set_dims(dims)
         self.set_spacing(spacing)
         self.set_voxel_size(voxel_size)
-        self.load_streamlines(streamlines)
+        if streamlines is not None:
+            self.load_streamlines(streamlines)
+            
 
+    def __del__(self):
+        try:
+            self._points.flush()
+            self._streamlines.flush()
+            self._hd5.flush()
+            self._hd5.close()
+            if self._hd5_handle is not None:
+                self._hd5_handle.close()
+        except Exception, e:
+            raise e
+            
     @property
     def affine(self):
         try:
-            return self._affine
+            return self._info[0]['affine']
         except:
             return None
 
     @property
     def dims(self):
         try:
-            return self._dims
+            return self._info[0]['dims']
         except:
             return None
 
     @property
+    def header(self, format='trackvis'):
+        try:
+            if format=='trackvis':
+                import nibabel.trackvis
+                header = nibabel.trackvis.empty_header()
+                header['vox_to_ras'] = self.affine
+                header['dims'] = self.dims
+                header['voxel_size'] = self.voxel_size
+                return header
+            ## format not handled, raise exception
+            raise Exception("Format %s is not supported" % format)
+        except Exception, e:
+            raise e
+        
+    @property
     def spacing(self):
         try:
-            return self._spacing
+            return self._info[0]['spacing']
+            self._info.flush()
         except:
             return None
 
     @property
     def streamlines(self):
-        ##TODO: implement streamlines generator
-        return None
+        idx = 0
+        while idx <= self._points[:]['streamline_idx'].max():
+            streamline = []
+            for point in self._points.where('streamline_idx == idx'):
+                streamline.append(([point['x'],point['y'],point['z']],None,None))
+            yield streamline
+            idx += 1
 
     @property
     def voxel_size(self):
         try:
-            return self._voxel_size
+            return self._info[0]['voxel_size']
+            self._info.flush()
         except:
             return None
 
@@ -56,7 +95,8 @@ class TNFibers(object):
             from numpy import asarray
             new_value = asarray(new_affine)
             if new_value.shape == (4,4):
-                self._affine = new_value
+                self._info[0]['affine'] = new_value
+                self._info.flush()
             else:
                 raise Exception("Affine should be a 4x4 matrix, but instead was %s" % new_value.shape)
         except Exception, e:
@@ -70,7 +110,8 @@ class TNFibers(object):
             if new_value.shape == (1,3):
                 self._dims = new_value
             else:
-                raise Exception("Dims should be a 1x3 matrix, but instead was %s" % new_value.shape)
+                raise Exception("Dims should be a 1x3 matrix, but \
+                                instead was %s" % new_value.shape)
         except Exception, e:
             raise e
 
@@ -86,6 +127,35 @@ class TNFibers(object):
         except Exception, e:
             raise e
 
+    @streamlines.setter
+    def streamlines(self, streamlines):
+        try:
+            self._points, self._streamlines = self._create_pytable()
+            for idx, entry in enumerate(streamlines):
+                streamline = entry[0]
+                streamline_data = dict()
+                streamline_data['idx'] = idx
+                from numpy import floor
+                streamline_data['start_voxel'] = floor(streamline[0])
+                streamline_data['end_voxel'] = floor(streamline[-1])
+                if self.spacing == 'voxel':
+                    streamline_data['length'] = length_of_streamline(streamline, self.voxel_size)
+                else:
+                    streamline_data['length'] = length_of_streamline(streamline)
+                self._streamlines.append(streamline_data)
+                for point in streamline:
+                    point_data = dict()
+                    point_data['streamline_idx'] = idx
+                    point_data['x'] = point[0]
+                    point_data['y'] = point[1]
+                    point_data['z'] = point[0]
+                    self._points.append(point_data)
+            self._points.flush()
+            self._streamlines.flush()
+            self._hd5.flush()
+        except Exception, e:
+            raise e
+                
     @voxel_size.setter
     def voxel_size(self, new_voxel_size):
         try:
@@ -101,21 +171,39 @@ class TNFibers(object):
         except Exception, e:
             raise e
         
-    def length_of_streamline(self, streamline_key):
-        ##TODO: impolement length of streamline
-        pass
+    def length_of_streamline(self, streamline_idx):
+        try:
+            return self._streamlines[streamline_idx]['length']
+        except Exception, e:
+            raise e
         
     def write(self, filename, format='trackvis'):
         if format == 'trackvis':
-            ##TODO: implement trackvis write
-            pass
-        if format == 'fib'
-           ##TODO: implement fib write
-                
-    def _trackvis_header(self):
-        
+            import nibabel.trackvis
+            nibabel.trackvis.write(filename, self.streamlines(),
+                                   hdr_mapping=self.header(format='trackvis'),
+                                   point_space = self.spacing)
 
-        
+    def _create_pytable(self):
+        try:
+            import tempfile
+            self._hd5_handle = tempfile.TemporaryFile(prefix='muscip_tn_fibers')
+            self._hd5 = tables.openFile(self._hd5_handle, mode='w+b')
+            self._info = self._hd5.createTable(self._hd5.root, 'info',
+                                               _TNFiber_Info)
+            self._points = self._hd5.createTable(self._hd5.root,
+                                                 'points', _TNFiber_Points)
+            self._streamlines = self._hd5.createTable(self._hd5.root,
+                                                      'streamlines',
+                                                      _TNFiber_Streamlines)
+            self._info.flush()
+            self._points.flush()
+            self._streamlines.flush()
+            self._hd5.flush()
+        except Exception, e:
+            raise e
+            
+
 ################################################################################        
 # Module Level Functions -------------------------------------------------------
 ################################################################################
@@ -132,9 +220,9 @@ def length_of_streamline(streamline, vox_dims=[1.,1.,1.]):
         start = vertices[idx]
         end = vertices[idx+1]
         from math import sqrt
-        distance = sqrt( ( (end[0]-start[0]) / vox_dims[0])**2 + \
-                         ( (end[1]-start[1]) / vox_dims[1])**2 + \
-                         ( (end[2]-start[2]) / vox_dims[2])**2 )
+        distance = sqrt( ( (end[0]-start[0]) * vox_dims[0])**2 + \
+                         ( (end[1]-start[1]) * vox_dims[1])**2 + \
+                         ( (end[2]-start[2]) * vox_dims[2])**2 )
         segments.append(distance)
         idx += 1
     from math import fsum
@@ -146,50 +234,58 @@ def read(file, format='trackvis'):
     if format not in accepted_formats:
         print "%s is not an accepted format" % format
         raise
+    ###########################################################################        
     # TRACKVIS
     if format == 'trackvis':
         import nibabel.trackvis
-        read_data = nibabel.trackvis.read(file)
-        my_data = dict()
-        for idx, rec in enumerate(read_data[0]):
-            my_data[idx] = {'vertices_mm': rec[0]}
-        return TNFibers(data=my_data, format='trackvis', header=read_data[1])
+        data, hdr = nibabel.trackvis.read(file, as_generator=True,
+                                          points_space='voxel')
+        def streamlines(data):
+            for record in data:
+                yield record[0]
+        return TNFibers(affine = hdr['vox_to_ras'],
+                        dims = hdr['dims'],
+                        spacing = 'voxel',
+                        streamlines = streamlines(data),
+                        voxel_size = hdr['voxel_size'])
+    ###########################################################################
     # FIBERTOOLS
-    if format == 'fiber_tools':
-        from scipy.io import loadmat
-        import nibabel.trackvis
-        all_data = loadmat(file)
-        fib_data = all_data['curveSegCell']
-        aff = all_data['hMatrix']
-        my_data = dict()
-        my_header = nibabel.trackvis.empty_header()
-        nibabel.trackvis.aff_to_hdr(aff, my_header)
-        for idx, fiber in enumerate(fib_data):
-            my_data[idx] = {'vertices_vox': fiber[0][:,[1,0,2]]}
-        return TNFibers(data=my_data, format='trackvis', header=my_header, spacing='vox')
+    # if format == 'fiber_tools':
+    #     from scipy.io import loadmat
+    #     import nibabel.trackvis
+    #     all_data = loadmat(file)
+    #     fib_data = all_data['curveSegCell']
+    #     aff = all_data['hMatrix']
+    #     my_data = dict()
+    #     my_header = nibabel.trackvis.empty_header()
+    #     nibabel.trackvis.aff_to_hdr(aff, my_header)
+    #     for idx, fiber in enumerate(fib_data):
+    #         my_data[idx] = {'vertices_vox': fiber[0][:,[1,0,2]]}
+    #     ##TODO: review and wrap-up loading
+    ###########################################################################            
     # MITK
-    if format == 'mitk':
-        import numpy as np
-        # create our new data structures
-        import nibabel.trackvis        
-        my_data = dict()
-        my_header = nibabel.trackvis.empty_header()
-        # setup for vtk parsing
-        import vtk                
-        reader=vtk.vtkPolyDataReader()
-        reader.SetFileName(file)
-        reader.Update()
-        lines = reader.GetOutput().GetLines()
-        points = reader.GetOutput().GetPoints()
-        ptr = vtk.vtkIdList()
-        lines.InitTraversal()
-        def read_streamlines():
-            while lines.GetNextCell(ptr):
-                vertices = list()
-                for i in range(0,ptr.GetNumberOfIds()):
-                    vertices.append(points.GetPoint(ptr.GetId(i)))
-                    yield np.asarray(vertices, dtype=np.float32)
-        return TNFibers(streamlines=read_streamines(), header=my_header, spacing='vox')
+    # if format == 'mitk':
+    #     import numpy as np
+    #     # create our new data structures
+    #     import nibabel.trackvis        
+    #     my_data = dict()
+    #     my_header = nibabel.trackvis.empty_header()
+    #     # setup for vtk parsing
+    #     import vtk                
+    #     reader=vtk.vtkPolyDataReader()
+    #     reader.SetFileName(file)
+    #     reader.Update()
+    #     lines = reader.GetOutput().GetLines()
+    #     points = reader.GetOutput().GetPoints()
+    #     ptr = vtk.vtkIdList()
+    #     lines.InitTraversal()
+    #     def read_streamlines():
+    #         while lines.GetNextCell(ptr):
+    #             vertices = list()
+    #             for i in range(0,ptr.GetNumberOfIds()):
+    #                 vertices.append(points.GetPoint(ptr.GetId(i)))
+    #                 yield np.asarray(vertices, dtype=np.float32)
+    #     ##TODO: review and wrap-up loading
 
 def sum_of_inverse_fiber_lengths(roi_img, endpoints, lengths):
     """For a given ROI atlas and set of fibers, return an adjacency
@@ -233,3 +329,30 @@ def sum_of_inverse_fiber_lengths(roi_img, endpoints, lengths):
             print e
             raise
     return result
+
+class _TNFiber_Info(tables.IsDescription):
+    """Description of internal info storage."""
+    affine = tables.Float32Col(shape=(4,4))
+    dims = tables.Float32Col(shape=3)
+    spacing = tables.StringCol()
+    voxel_size = tables.Float32Col(shape=3)
+
+class _TNFiber_Points(tables.IsDescription):
+    """Description of internal points storage... this forms the basis
+    for streamlines.
+
+    """
+    streamline_idx = tables.Int32Col(pos=1)
+    x = tables.Float32Col(pos=2)
+    y = tables.Float32Col(pos=3)
+    z = tables.Float32Col(pos=4)
+
+class _TNFiber_Streamlines(tables.IsDescription):
+    """Description of internal steramlines storage. This is mainly for
+    convenience of grabbing, endpoints, as well as length.
+
+    """
+    idx = tables.Int32Col(pos=1)
+    start = tables.Float32Col(shape=3,pos=2)
+    end = tables.Float32Col(shape=3,pos=3)
+    length = tables.Float32Col(pos=4)
