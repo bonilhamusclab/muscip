@@ -19,7 +19,34 @@ class TNConnectomeGroup(object):
         self.subject_dir = op.abspath(subject_dir)
         self.subjects = subjects
         self.connectome_path = connectome_path
+        self._info_keys = None
+        self._metric_keys = None
+        self._number_of_nodes = None
 
+    @property
+    def info_keys(self):
+        if self._info_keys:
+            return self._info_keys
+        else:
+            self.load_info_keys()
+            return self._info_keys
+        
+    @property
+    def metric_keys(self):
+        if self._metric_keys:
+            return self._metric_keys
+        else:
+            self.load_metric_keys()
+            return self._metric_keys
+
+    @property
+    def number_of_nodes(self):
+        if self._number_of_nodes:
+            return self._number_of_nodes
+        else:
+            self.guess_number_of_nodes()
+            return self._number_of_nodes
+            
     def connectomes(self):
         """Iterate and yield connectomes."""
         try:
@@ -31,6 +58,30 @@ class TNConnectomeGroup(object):
         except Exception as e:
             raise e
 
+    def export_to_matlab(self, filename, number_of_nodes=None):
+        structure = dict()
+        structure['Sub'] = list()
+        exclude_keys = ['streamlines', 'streamlines_length']
+        if number_of_nodes is None:
+            number_of_nodes = self.number_of_nodes
+        for connectome in self.connectomes():
+            # grab info for connectome
+            record = dict()
+            for key in self.info_keys:
+                try:
+                    record[key] = connectome.graph['info'][key]
+                except KeyError:
+                    record[key] = None
+            # grab metrics for connectome
+            for key in self.metric_keys:
+                if key in exclude_keys:
+                    continue
+                record[key] = connectome.matrix_for_key(key,
+                                                        number_of_nodes=number_of_nodes)
+            structure['Sub'].append(record)
+            from scipy.io import savemat
+            savemat(filename, structure)
+        
     def dataFrame(self, info_keys=None, metric_keys=None, number_of_nodes=None):
         try:
             df = dict()
@@ -81,6 +132,39 @@ class TNConnectomeGroup(object):
                              fixed_density=None
     ):
         pass
+
+    def load_info_keys(self):
+        self._info_keys = list()
+        for C in self.connectomes():
+            try:
+                for key in C.graph['info']:
+                    if key not in self._info_keys:
+                        self._info_keys.append(key)
+            except KeyError:
+                continue
+            except Exception, e:
+                raise e
+        self._info_keys.sort()
+
+    def load_metric_keys(self):
+        self._metric_keys = list()
+        try:
+            for C in self.connectomes():
+                for u,v,data in C.edges_iter(data=True):
+                    for key in data.keys():
+                        if key not in self._metric_keys:
+                            self._metric_keys.append(key)
+        except Exception, e:
+            raise e
+        self._metric_keys.sort()
+
+    def guess_number_of_nodes(self):
+        guess = 0
+        for connectome in self.connectomes():
+            max_node = max(connectome.nodes())
+            if max_node > guess:
+                guess = max_node
+        return guess
 
     def set_info(self, csvfile, id_key, new_filename=None):
         

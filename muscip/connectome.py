@@ -197,7 +197,86 @@ class TNConnectome(networkx.Graph):
         for label, data in node_info.nodes_iter(data=True):
             self.add_node(int(label), data)
             self.node[int(label)]['subject_position'] = tuple( np.mean ( np.where ( ROI_img_data == int(label) ), axis=1 ) )
+            
+    def remap(self, mapping):
+        """Remap values in connectome acording to map. 
+
+        Inputs::
+
+          mapping: a dictionary containing node keys and the mapping
+                   for the corresponding node key, in this form each
+                   node key must be represented (bi-directionality is
+                   *not* assumed). For (a,b) and (c,d), where {a:c,
+                   b:d} and the bi-directional entries do not exist in
+                   the mapping, the original entries are removed in
+                   both the origin and destination nodes
         
+        Example: bi-directionally swap nodes (1,4) and (2,3)
+        -------
+        >>> mapping = {1:4, 4:1, 2:3, 3:2}
+        >>> connectome.remap(mapping)
+
+        """
+        touched_list = [] # we need to maintain a list of edges that
+                          # we have already touched so that we avoid
+                          # swapping edges more than once
+
+        def is_bidirectional(u0,v0):
+            # is bidirectional if bidirectional entry exists in
+            # mapping, and both edges exist in graph
+            both_keys_exist = u0 in mapping.keys() and v0 in mapping.keys()
+            if both_keys_exist:
+                bidirectional = mapping[u0]==v0 and mapping[v0]==u0
+            u1,v1 = remapped_node_keys(u0,v0)
+            both_edges_exist = self.has_edge(u1,v1)
+            return both_keys_exist and both_edges_exist and bidirectional
+            
+        def needs_remapping(u0,v0):
+            # we need to remap if either u0 or v0 appear anywhere in
+            # the mapping... as long as we have not already remapped
+            # this edge
+            already_visited = (u0,v0) in touched_list
+            keys = mapping.keys()
+            mapping_entry_found = u0 in keys or v0 in keys
+            return not already_visited and mapping_entry_found
+            
+        def remapped_node_keys(u0,v0):
+            return mapping[u0], mapping[v0]
+
+        def shift(u0,v0):
+            u1,v1 = remapped_node_keys(u0,v0)
+            # try to remove the target edge, this will fail if it does
+            # not exist
+            try:
+                self.remove_edge(u1,v1)
+            except:
+                pass
+            self.add_edge(u1,v1,self[u0][v0]) # add new edge
+            self.remove_edge(u0,v0)           # remove old edge
+            touched_list.append((u1,v1))      # mark target edge as
+                                              # touched
+
+        def swap(u0,v0):
+            u1,v1 = remapped_node_keys(u0,v0)
+            a = self[u0][v0]
+            b = self[u1][v1]
+            self.remove_edge(u0,v0)              # remove both edges
+            self.remove_edge(u1,v1)
+            self.add_edge(u0,v0,b)               # create both edges anew
+            self.add_edge(u1,v1,a)
+            touched_list.append((u0,v0),(u1,v1)) # mark both edges as
+                                                 # touched
+            
+        for u0,v0 in self.edges():
+            if not needs_remapping(u0,v0):
+                continue
+            if is_bidirectional(u0,v0):
+                swap(u0,v0)
+            else:
+                shift(u0,v0)
+            
+                
+    
     def set_info(self, info):
         """Set info for connectome. This will add a info dictionary
         and provided keys/values to the connectome.
