@@ -7,7 +7,7 @@ class TNFibers(object):
                  affine = None,
                  dims = None,
                  h5_file = None,
-                 spacing = 'voxel',
+                 spacing = None,
                  streamlines = None,
                  voxel_size = None
     ):
@@ -15,22 +15,24 @@ class TNFibers(object):
             self._create_h5_file()
         else:
             self._load_h5_file(h5_file)
-        self.set_affine(affine)
-        self.set_dims(dims)
-        self.set_spacing(spacing)
-        self.set_voxel_size(voxel_size)
+        self.affine = affine
+        self.dims = dims
+        self.spacing = spacing
+        self.voxel_size = voxel_size
+        self._write_info()
         if streamlines is not None:
             self.load_streamlines(streamlines)
-            
 
     def __del__(self):
         try:
+            self._info.flush()
             self._points.flush()
             self._streamlines.flush()
             self._hd5.flush()
             self._hd5.close()
-            if self._hd5_handle is not None:
-                self._hd5_handle.close()
+            if self._tmpdir is not None:
+                from shutil import rmtree
+                rmtree(self._tmpdir)
         except Exception, e:
             raise e
             
@@ -55,7 +57,7 @@ class TNFibers(object):
                 import nibabel.trackvis
                 header = nibabel.trackvis.empty_header()
                 header['vox_to_ras'] = self.affine
-                header['dims'] = self.dims
+                header['dim'] = self.dims
                 header['voxel_size'] = self.voxel_size
                 return header
             ## format not handled, raise exception
@@ -92,45 +94,65 @@ class TNFibers(object):
     @affine.setter
     def affine(self, new_affine):
         try:
-            from numpy import asarray
-            new_value = asarray(new_affine)
-            if new_value.shape == (4,4):
-                self._info[0]['affine'] = new_value
-                self._info.flush()
+            if self._info.nrows == 0:
+                new_info = self._info.row
+                new_info['affine'] =  new_affine
+                new_info.append()
             else:
-                raise Exception("Affine should be a 4x4 matrix, but instead was %s" % new_value.shape)
+                self._info[0]['affine'] = new_affine
         except Exception, e:
             raise e
-
+        self._flush_data()
+        
     @dims.setter
     def dims(self, new_dims):
         try:
-            from numpy import asarray
-            new_value = asarray(new_dims)
-            if new_value.shape == (1,3):
-                self._dims = new_value
+            if self._info.nrows == 0:
+                new_info = self._info.row
+                new_info['dims'] =  new_dims
+                new_info.append()
             else:
-                raise Exception("Dims should be a 1x3 matrix, but \
-                                instead was %s" % new_value.shape)
+                self._info[0]['dims'] = new_dims
         except Exception, e:
             raise e
+        self._flush_data()
 
     @spacing.setter
     def spacing(self, new_spacing):
         try:
-            accepted_spacings = ['voxel', 'voxelmm', 'rasmm']
-            if new_spacing in accepted_spacings:
-                self._spacing = new_spacing
+            if self._info.nrows == 0:
+                new_info = {'spacing': new_spacing}
+                self._info.append(new_info)
             else:
-                raise Exception("Valid spacing options include: %s, but %s was provided."
-                                % (accepted_spacings, new_spacing))
+                self._info[0]['spacing'] = new_spacing
+        except Exception, e:
+            raise e
+        self._flush_data()
+
+    @voxel_size.setter
+    def voxel_size(self, new_voxel_size):
+        try:
+            from numpy import asmatrix
+            new_value = asmatrix(new_voxel_size)
+            if new_value.shape == (1,1):
+                self._voxel_size = new_value * [1,1,1]
+            if new_value.shape == (1,3):
+                self._voxel_size = new_value
+            else:
+                raise Exception("Voxel size must be provided as a 1x1 or 1x3 matrix, not %s." %
+                                new_value.shape)
+        except Exception, e:
+            raise e
+        
+    def length_of_streamline(self, streamline_idx):
+        try:
+            return self._streamlines[streamline_idx]['length']
         except Exception, e:
             raise e
 
-    @streamlines.setter
-    def streamlines(self, streamlines):
+    def load_streamlines(self, streamlines):
         try:
-            self._points, self._streamlines = self._create_pytable()
+            self._points, self._streamlines = self._create_ytable()
             for idx, entry in enumerate(streamlines):
                 streamline = entry[0]
                 streamline_data = dict()
@@ -155,27 +177,6 @@ class TNFibers(object):
             self._hd5.flush()
         except Exception, e:
             raise e
-                
-    @voxel_size.setter
-    def voxel_size(self, new_voxel_size):
-        try:
-            from numpy import asmatrix
-            new_value = asmatrix(new_voxel_size)
-            if new_value.shape == (1,1):
-                self._voxel_size = new_value * [1,1,1]
-            if new_value.shape == (1,3):
-                self._voxel_size = new_value
-            else:
-                raise Exception("Voxel size must be provided as a 1x1 or 1x3 matrix, not %s." %
-                                new_value.shape)
-        except Exception, e:
-            raise e
-        
-    def length_of_streamline(self, streamline_idx):
-        try:
-            return self._streamlines[streamline_idx]['length']
-        except Exception, e:
-            raise e
         
     def write(self, filename, format='trackvis'):
         if format == 'trackvis':
@@ -184,11 +185,12 @@ class TNFibers(object):
                                    hdr_mapping=self.header(format='trackvis'),
                                    point_space = self.spacing)
 
-    def _create_pytable(self):
+    def _create_h5_file(self):
         try:
             import tempfile
-            self._hd5_handle = tempfile.TemporaryFile(prefix='muscip_tn_fibers')
-            self._hd5 = tables.openFile(self._hd5_handle, mode='w+b')
+            self._tmpdir = tempfile.mkdtemp()
+            from os.path import join
+            self._hd5 = tables.openFile(join(self._tmpdir,'fibers.h5'), mode='a')
             self._info = self._hd5.createTable(self._hd5.root, 'info',
                                                _TNFiber_Info)
             self._points = self._hd5.createTable(self._hd5.root,
@@ -196,14 +198,43 @@ class TNFibers(object):
             self._streamlines = self._hd5.createTable(self._hd5.root,
                                                       'streamlines',
                                                       _TNFiber_Streamlines)
-            self._info.flush()
-            self._points.flush()
-            self._streamlines.flush()
-            self._hd5.flush()
+            self._flush_data()
         except Exception, e:
             raise e
-            
 
+    def _flush_data(self):
+        self._info.flush()
+        self._points.flush()
+        self._streamlines.flush()
+        self._hd5.flush()
+
+    def _load_h5_file(self, h5_file):
+        try:
+            self._hd5 = tables.openFile(h5_file, mode='a')
+            self._info = self._hd5.getNode('/info')
+            self._points = self._hd5.getNode('/points')
+            self._streamlines = self._hd5.getNode('/streamlines')
+        except Exception, e:
+            raise e
+
+    def _write_info(self):
+        # if we haven't yet written info
+        if self._info.nrows is None:
+            # create and add
+            info = dict()
+            info['affine'] = self.affine
+            info['dims'] = self.dims
+            info['spacing'] = self.spacing
+            info['voxel_size'] = self.voxel_size
+            self._info.append(info)
+        # if we have existing data in our hd5 file...
+        else:
+            self._info[0]['affine'] = self.affine
+            self._info[0]['dims'] = self.dims
+            self._info[0]['spacing'] = self.spacing
+            self._info[0]['voxel_size'] = self.voxel_size
+        self._flush_data()
+        
 ################################################################################        
 # Module Level Functions -------------------------------------------------------
 ################################################################################
@@ -244,7 +275,7 @@ def read(file, format='trackvis'):
             for record in data:
                 yield record[0]
         return TNFibers(affine = hdr['vox_to_ras'],
-                        dims = hdr['dims'],
+                        dims = hdr['dim'],
                         spacing = 'voxel',
                         streamlines = streamlines(data),
                         voxel_size = hdr['voxel_size'])
@@ -334,7 +365,7 @@ class _TNFiber_Info(tables.IsDescription):
     """Description of internal info storage."""
     affine = tables.Float32Col(shape=(4,4))
     dims = tables.Float32Col(shape=3)
-    spacing = tables.StringCol()
+    spacing = tables.StringCol(5)
     voxel_size = tables.Float32Col(shape=3)
 
 class _TNFiber_Points(tables.IsDescription):
