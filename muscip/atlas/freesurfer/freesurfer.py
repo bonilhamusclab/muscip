@@ -19,20 +19,92 @@ class Freesurfer(object):
 
     """
 
-    def __init__(self):
+    def __init__(self, fs_dir=None):
         """Return a freesurfer atlas with labels as defined by
         look-up-tables
 
         """
+        self.fs_dir = fs_dir
         self.gm_lut = _def_gm_lut()
         self.node_info = _def_node_info()
         self.roi_img = None
         self.wm_lut = _def_wm_lut()
         self.wm_mask = None
 
+    def extract_stats(self):
+        """Parse freesurfer stat files and return a dictionary with
+        entries for each node as well as include entries for file-wide
+        measures.
+
+        """
+        # create an empty dictionary, with entries for each node
+        # w/ key and name, as well as a reverse lookup by name
+        import networkx as nx
+        struct = nx.Graph()
+        label_by_name = dict()
+        for label, data in self.node_info.nodes_iter(data=True):
+            struct.add_node(label,{'name': data['name']})
+            label_by_name[data['name']] = label
+        # get lh-cortex
+        self._parse_stats('lh.aparc.stats', 'ctx-lh-', struct, label_by_name)
+        # get rh-cortex
+        self._parse_stats('rh.aparc.stats', 'ctx-rh-', struct, label_by_name)
+        # get sub-cortical
+        self._parse_stats('aseg.stats', None, struct, label_by_name)
+        # return result
+        return struct
+
+    def _parse_stats(self, stats_file, prefix, out_struct, label_lut):
+        from os.path import join
+        fhandle = open(join(self.fs_dir, 'stats', stats_file), 'rb')
+        header = None
+        header_label = 'ColHeaders'
+        if prefix is None:
+            prefix = '' # we are appending to this, so it must be an
+                        # empty string...
+        for line in fhandle.readlines():
+            # we will reach header first, other processing depends
+            # on succesfully parsing header for keys, so let us
+            # first get that..
+            if header is None:
+                # if this is the header...
+                try:
+                    if line.split()[1] == header_label:
+                        # ...get the keys from the header
+                        header = line.split()[2:]
+                        label_col_idx = header.index('StructName')
+                # exception will occur if this is just an empty
+                # comment line
+                except:
+                    continue
+            # ...if header is not None, then we can assume it has
+            # already been processed
+            else:
+                # check to make sure line is not a comment, if
+                # it is, move on to next line
+                if line.split()[0] == '#':
+                    continue
+                # otherwise, first term is prefix-less-name of region
+                # to which we must find label - we must also handle
+                # the case where we find a region in the stats file
+                # that is not in our expected regions, as our expected
+                # regions may be a subset of all regions
+                try:
+                    region_label = label_lut[prefix + line.split()[label_col_idx]]
+                except KeyError:
+                    continue
+                except Exception, e:
+                    raise e
+                # ...and we need to get values for each stat label
+                for idx, stat in enumerate(line.split()):
+                    out_struct.node[region_label][header[idx]] = stat
+
+                    
+# MODULE LEVEL FUNCTIONS
+###################################################
 def load(freesurfer_dir, gm_lut=None, wm_lut=None):
     """Return an instance of our Freesurfer atlas class"""
-    newAtlas = Freesurfer()    
+    newAtlas = Freesurfer(fs_dir=freesurfer_dir)    
     # load new atlas starting from aparc+aseg.mgz
     #############################################
     # convert mgz files to nii.gz files
