@@ -197,7 +197,7 @@ class TNConnectome(networkx.Graph):
         for label, data in node_info.nodes_iter(data=True):
             self.add_node(int(label), data)
             self.node[int(label)]['subject_position'] = tuple( np.mean ( np.where ( ROI_img_data == int(label) ), axis=1 ) )
-            
+
     def remap(self, mapping):
         """Remap values in connectome acording to map. 
 
@@ -275,8 +275,6 @@ class TNConnectome(networkx.Graph):
             else:
                 shift(u0,v0)
             
-                
-    
     def set_info(self, info):
         """Set info for connectome. This will add a info dictionary
         and provided keys/values to the connectome.
@@ -287,6 +285,32 @@ class TNConnectome(networkx.Graph):
 
         """
         self.graph['info'] = info
+
+    def submatrix_for_key(self, submatrix_nodes, key):
+        """Return a NxN matrix for key, where N ==
+        len(submatrix_nodes). Submatrix nodes are first sorted, then
+        metrics are extracted for each edge (i,j) in order according
+        to sort.
+
+        """
+        import numpy
+        submatrix_nodes.sort()        
+        n = len(submatrix_nodes)
+        new_cmat = numpy.zeros((n,n))
+        for i in range(0,n):
+            for j in range(0,n):
+                node0 = submatrix_nodes[i]
+                node1 = submatrix_nodes[j]
+                if node0 == node1:
+                    new_cmat[i][j] = 0
+                else:
+                    try:
+                        new_cmat[i][j] = self[node0][node1][key]
+                    except KeyError:
+                        pass
+                    except Exception, e:
+                        raise e
+        return new_cmat
 
     def write(self, filename):
         """Write connectome to the given filename as gpickle.

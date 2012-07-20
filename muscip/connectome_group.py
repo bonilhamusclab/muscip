@@ -58,7 +58,9 @@ class TNConnectomeGroup(object):
         except Exception as e:
             raise e
 
-    def export_to_matlab(self, filename, number_of_nodes=None):
+    def export_to_matlab(self, filename,
+                         number_of_nodes=None,
+                         subnetwork_nodes=None):
         structure = dict()
         structure['Sub'] = list()
         exclude_keys = ['streamlines', 'streamlines_length']
@@ -76,8 +78,11 @@ class TNConnectomeGroup(object):
             for key in self.metric_keys:
                 if key in exclude_keys:
                     continue
-                record[key] = connectome.matrix_for_key(key,
-                                                        number_of_nodes=number_of_nodes)
+                if subnetwork_nodes is None:
+                    record[key] = connectome.matrix_for_key(key,
+                                                            number_of_nodes=number_of_nodes)
+                else:
+                    record[key] = connectome.submatrix_for_key(subnetwork_nodes, key)
             structure['Sub'].append(record)
             from scipy.io import savemat
             savemat(filename, structure)
