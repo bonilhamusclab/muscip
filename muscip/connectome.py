@@ -558,6 +558,41 @@ def generate_connectome(fib, roi_img, node_info=None):
     # return our results
     return connectome
 
+def generate_connectome_from_cmat(cmat,
+                                  metric_key,
+                                  roi_img = None,
+                                  node_info = None):
+    """Return a TNConnectome object
+
+    Example
+    -------
+    import muscip.connectome as mcon
+    C = mcon.connectome.generate_connectome_from_cmat(cmat, 'my_new_key')
+
+    Input::
+
+    [mandatory]
+
+      cmat - connection matrix indicating some metric
+
+      metric_key - key under which to store metric
+
+    [optional]
+
+      roi_img - a loaded nibabel image representing rois
+
+      node_info - node information
+
+    """
+    C = TNConnectome()
+    if roi_img is not None and node_info is not None:
+        C.populate_node_info(roi_img.get_data(), node_info)
+    for i in range(0,cmat.shape[0]):
+        for j in range(0,cmat.shape[1]):
+            C.add_edge(i,j)
+            C[i][j][metric_key] = (cmat[i,j] + cmat[j,i]) / 2.0
+    return C
+    
 def read_gpickle(filename):
     """Create connectome object from a given gpickle.
 
