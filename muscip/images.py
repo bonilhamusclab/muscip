@@ -205,6 +205,26 @@ class TNImage(object):
 
         """
         return self._base.get_data()
+
+    def get_volume(self, volume_idx):
+        """Return a specified volume belonging to a 4dim image. This
+        can be useful when the image is large and we want to avoid
+        loading the whole image into memory.
+
+        """
+        from nibabel.volumeutils import allopen, array_from_file
+
+        def get_fileobj(nibimage):
+            fileobj = allopen(nibimage.get_filename())
+            return fileobj
+            
+        dtype = self._base.get_data_dtype()
+        s = self._base.get_header().get_data_shape()
+        shape = (s[0], s[1], s[2])
+        bytes_per_volume = np.prod(shape)
+        offset = self._base.get_header().get_data_offset() + (volume_idx * bytes_per_volume)
+        data = array_from_file(shape, dtype, get_fileobj(self._base), offset)
+        return data
         
     def number_of_b_zeros(self):
         """Return the number of b zeros if applicable, else return
