@@ -167,6 +167,9 @@ class TNConnectome(object):
                         raise Exception('Could not parse modifications file.')
                     finally:
                         modifications_file.close()
+                # case: filename exists, but modifications file does not
+                else:
+                    self._modifications = []
             # generate empty modifications list
             else:
                 self._modifications = []
