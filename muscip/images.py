@@ -265,6 +265,69 @@ class TNImage(object):
         return reshaped.mean(axis=-1).reshape(outshape)
 
 # module level functions
+def dilate_rois(roi_img, iterations=1, mask=None, output=None):
+    """Dilate an roi image, by first treating the roi image as an
+    signle-value image, dilate using procedure from fslmaths, then for
+    every voxel which now exists in the dilated image, but not in the
+    original, poll the neighborhood of new voxel in the domain of the
+    original roi image, taking votes for labels that decrease in
+    weight as distance from center of new voxel increases.
+
+    Input::
+
+      roi_img: roi image consiting of integer labeled voxels, which to
+      dilate
+
+      iterations: number of times to perform dilation; 2 iterations
+      would consist of dilating once, then dilating the dilated rois
+      once more, default=1
+
+      mask: Binary mask image that must be same dimensions as
+      roi_img. If provided, this will limit both the search and target
+      voxels to non-zero voxels in the mask.
+
+      output: if provided, save the result to filename provided, else
+      return result as image.
+
+    """
+    affine = None
+    header = None
+    if isinstance(roi_img, basestring):
+        roi_img = nibabel.load(roi_img)
+    if isinstance(roi_img, nibabel.spatialimages.SpatialImage):
+        affine = roi_img.get_affine()
+        header = roi_img.get_header()
+        dil_data = roi_img.get_data()
+    else:
+        raise Exception("Do not understand ROI image format.")
+    if mask is not None:
+        if isinstance(mask, basestring):
+            mask = nibabel.load(mask)
+        mask_data = mask.get_data()
+        dil_data = (mask_data > 0) * dil_data
+    roi_labels = np.unique(dil_data[dil_data > 0])
+    for i in range(0,iterations):
+        roi_data = dil_data.copy()
+        for label in roi_labels:
+            voxels_to_set = get_non_labeled_neighbors_for_value(roi_data, label)
+            for voxel in voxels_to_set:
+                # if another roi has already claimed this voxel, zero
+                # it back out, because we don't want to bother with
+                # trying to figure out which labe to assign
+                if dil_data[voxel] > 0 and dil_data[voxel] != label:
+                    dil_data[voxel] = 0
+                # else, this is the first time we are visiting this
+                # voxel, and if it is within the mask, let's assign the value
+                if mask_data[voxel] > 0:
+                    dil_data[voxel] = label
+    # generate output
+    out_img = nibabel.Nifti1Image(dil_data, affine, header)
+    if output is None:
+        return out_img
+    else:
+        nibabel.save(out_img, output)
+        return None
+    
 def get_wm_neighbors_for_value(ROI_img, WM_img, value):
     """Return the indices of all voxels in the ROI with the given
     value, which are adjacent to a white matter voxel (a voxel with a
@@ -280,6 +343,67 @@ def get_wm_neighbors_for_value(ROI_img, WM_img, value):
     for idx in test_idxs:
         if voxel_has_neighbor_with_value(WM_data, idx, 1):
             results.append(idx)
+    return results
+
+def get_non_labeled_neighbors_for_value(roi_img, value):
+    """Return indices of all non-labeled voxels neighboring an roi
+    with a given value.
+
+    """
+    if isinstance(roi_img, basestring):
+        data = nibabel.load(roi_img).get_data()
+    if isinstance(roi_img, TNImage):
+        data = roi_img._base.get_data()
+    if isinstance(roi_img, np.ndarray):
+        data = roi_img
+    results = list()
+    test_idxs = np.argwhere(data == value)
+    for test_idx in test_idxs:
+        for found_idx in neighbors_with_value(data, test_idx, 0):
+            results.append(found_idx)
+    return results
+
+def neighbors_with_value(img, voxel, value):
+    """Return the indices of voxels neighboring a given voxel, having
+    a given value.
+
+    """
+    if isinstance(img, basestring):
+        data = nibabel.load(img).get_data()
+    if isinstance(img, TNImage):
+        data = img._base.get_data()
+    if isinstance(img, np.ndarray):
+        data = img
+    results = list()
+    search_space = [-1,0,1]
+    me = tuple(voxel)
+    x0 = voxel[0]
+    y0 = voxel[1]
+    z0 = voxel[2]
+    for dx in search_space:
+        for dy in search_space:
+            for dz in search_space:
+                test_idx = tuple([x0+dx, y0+dy, z0+dz])
+                # if test_idx is equal to original, let's move on to
+                # the next
+                if test_idx == me:
+                    continue
+                # if any of our xyz coordinates (for test idx) are
+                # negative, let's move on to the next (this would mean
+                # we are wrapping around a dimension, like pac-man
+                # when he goes through one side of the screen and ends
+                # up on the opposite)
+                if -1 in test_idx:
+                    continue
+                # if we've made it here we are ready to test for the
+                # target value for this particular voxel
+                try: # use try to handle indexing errors (our algo
+                     # will search beyond the max index for edge
+                     # cases)
+                    if data[test_idx] == value:
+                        results.append(test_idx)
+                except:
+                    pass # nothing to do, this is normal for edge cases
     return results
 
 def voxel_has_neighbor_with_value(test_img_data, voxel_idx, target_value):
