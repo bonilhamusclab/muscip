@@ -2,6 +2,7 @@ import datetime, networkx, os, pickle, shutil
 from ..images import TNImage
 
 __CLINICAL_INFO_FILENAME__ = 'clinical_info.pickle'
+__DEFAULT_VOX_DIMS__ = [1.0, 1.0, 1.0]
 __MANIFEST_FILENAME__ = 'manifest.pickle'
 __MODIFICATIONS_FILENAME__ = 'modifications.pickle'
 __NETWORK_FILENAME__ = 'graph.gpickle'
@@ -15,7 +16,8 @@ class TNConnectome(object):
                  clinical_info = None,
                  filename = None,
                  network = None,
-                 roi_image = None
+                 roi_image = None,
+                 vox_dims = None
     ):
         if filename is not None:
             self._filename = filename
@@ -29,6 +31,8 @@ class TNConnectome(object):
             self.network = network
         if roi_image is not None:
             self.roi_image = roi_image
+        if vox_dims is not None:
+            self.vox_dims = vox_dims
 
     @property
     def created(self):
@@ -305,6 +309,13 @@ class TNConnectome(object):
             raise Exception("Cannot overwrite previous version.")
 
     @property
+    def vox_dims(self):
+        try:
+            return self._vox_dims
+        except AttributeError:
+            return __DEFAULT_VOX_DIMS__
+            
+    @property
     def filename(self):
         """Internal attribute returning filename or None if filename
         has not been set.
@@ -561,13 +572,14 @@ class TNConnectome(object):
         # GRAPH #############################################################
         networkx.write_gpickle(self.network,
                                os.path.join(filename,__NETWORK_FILENAME__))
-        # VERSION and TYPE ##################################################        
-        manifest_info = {'VERSION': self.version,
-                         'TYPE': self.type,
-                         'CREATED': self.created}
+        # MANIFEST_INFO ## ##################################################        
+        self.manifest['VERSION'] = self.version
+        self.manifest['TYPE'] = self.type
+        self.manifest['CREATED'] = self.created
+        self.manifest['VOX_DIMS'] = self.vox_dims
         try:
             manifest_file = open(os.path.join(filename,__MANIFEST_FILENAME__), 'wb')
-            pickle.dump(manifest_info, manifest_file)
+            pickle.dump(self.manifest, manifest_file)
         except Exception, e:
             raise e
         finally:
@@ -619,6 +631,7 @@ def read(filename):
         manifest = pickle.load(manifest_file)
         _version = manifest['VERSION']
         _type = manifest['TYPE']
+        _vox_dims = manifest['VOX_DIMS']
         manifest_file.close()
     except:
         raise Exception("Could not parse manifest belonging to %s." % filename)
@@ -630,8 +643,8 @@ def read(filename):
     if _type == 'PROBTRACKX':
         from . import TNProbtrackxConnectome
         return TNProbtrackxConnectome(filename=filename)
-
-
+    # set any properties of the super
+    self._vox_dims = _vox_dims # vox dims
 
 ####    
 def generate_connectome(fib, roi_img, node_info=None):
