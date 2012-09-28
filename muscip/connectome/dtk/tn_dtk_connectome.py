@@ -1,12 +1,13 @@
 import numpy, os, shutil
 from ..connectome import TNConnectome
 from ...images import TNImage
-from ...fibers import length_of_streamline, read, transform_streamline_by_aff
+from ...fibers import fiber_length, read_trackvis, transform_fiber_by_aff
 
 __DEFAULT_MAX_FIBER_LENGTH__ = 200.0
 __DEFAULT_MIN_FIBER_LENGTH__ = 20.0
-__FIBERS_FILENAME__ = 'fibers.trk'
 __FIBERS_TO_ROI_AFFINE_FILENAME__ = 'fibers-to-roi-affine.mat'
+__FIBERS_FILENAME__ = 'fibers.trk'
+__FILTERED_FIBERS_FILENAME = ''
 __TYPE__ = 'DTK'
 __WM_IMAGE_PREFIX__ = 'wm'
 
@@ -42,13 +43,13 @@ class TNDtkConnectome(TNConnectome):
         if aff is None:
             aff = numpy.linalg.inv(self.fibers_to_roi_affine)
         # for every edge calculate the average scalar value for all
-        # streamlines
+        # fibers
         for i,j in self.network.edges_iter():
             accum_outside = 0.0
-            for streamline in self.network[i][j]['streamlines']:
-                streamline = transform_streamline_by_aff(streamline, aff, self.vox_dims)
+            for fiber in self.network[i][j]['fibers']:
+                fiber = transform_fiber_by_aff(fiber, aff, self.vox_dims)
                 accum_inside = 0.0
-                for idx in streamline:
+                for idx in fiber:
                     try:
                         accum_inside += scalar_data[tuple(idx)]
                     except:
@@ -65,7 +66,7 @@ class TNDtkConnectome(TNConnectome):
         except AttributeError:
             pass
         if self.fibers_path is not None:
-            return read(self.fibers_path, format='trackvis')
+            return read_trackvis(self.fibers_path)
         else:
             return None
         
@@ -130,29 +131,29 @@ class TNDtkConnectome(TNConnectome):
         # else...
         print("...loading ROI and Fibers")
         roi_data = self.roi_image.get_data()
-        streamline_counter = 0
-        total_streamlines = self.fibers.number_of_streamlines
-        for streamline in self.fibers.streamlines:
-            streamline_counter += 1
-            if streamline_counter % 10000 == 0:
-                if total_streamlines is not None:
-                    print "...%.2f of fibers processed" % (100 * (streamline_counter / float(total_streamlines)))
+        fiber_counter = 0
+        total_fibers = self.fibers.number_of_fibers
+        for fiber in self.fibers.fibers:
+            fiber_counter += 1
+            if fiber_counter % 10000 == 0:
+                if total_fibers is not None:
+                    print "...%.2f%% of fibers processed" % (100 * (fiber_counter / float(total_fibers)))
                 else:
-                    print "...%s fibers have been processed" % streamline_counter
-            streamline = transform_streamline_by_aff(streamline, self.fibers_to_roi_affine)
-            len_streamline = length_of_streamline(streamline)
-            if len_streamline >= min_length and len_streamline <= max_length:
-                i_value = int(roi_data[tuple(streamline[0])])
-                j_value = int(roi_data[tuple(streamline[-1])])
+                    print "...%s fibers have been processed" % fiber_counter
+            fiber = transform_fiber_by_aff(fiber, self.fibers_to_roi_affine)
+            len_fiber = fiber_length(fiber)
+            if len_fiber >= min_length and len_fiber <= max_length:
+                i_value = int(roi_data[tuple(fiber[0])])
+                j_value = int(roi_data[tuple(fiber[-1])])
                 if i_value != 0 and j_value !=0 and i_value != j_value:
                     try:
                         self.network[i_value][j_value]['fiber_count'] += 1
-                        # self.network[i_value][j_value]['streamlines'].append(streamline)
+                        # self.network[i_value][j_value]['fibers'].append(fiber)
                     except KeyError:
                         self.network.add_edge(i_value, j_value)
                         self.network[i_value][j_value]['fiber_count'] = 1
-                        # self.network[i_value][j_value]['streamlines'] = []
-                        # self.network[i_value][j_value]['streamlines'].append(streamline)
+                        # self.network[i_value][j_value]['fibers'] = []
+                        # self.network[i_value][j_value]['fibers'].append(fiber)
 
     @property
     def max_fiber_length(self):
