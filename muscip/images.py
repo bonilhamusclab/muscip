@@ -206,6 +206,9 @@ class TNImage(object):
         """
         return self._base.get_data()
 
+    def get_header(self):
+        return self._base.get_header()
+        
     def get_volume(self, volume_idx):
         """Return a specified volume belonging to a 4dim image. This
         can be useful when the image is large and we want to avoid

@@ -1,7 +1,7 @@
 import numpy, os, shutil
 from ..connectome import TNConnectome
 from ...images import TNImage
-from ...fibers import TNFibers, length_of_streamline
+from ...fibers import length_of_streamline, read, transform_streamline_by_aff
 
 __DEFAULT_MAX_FIBER_LENGTH__ = 200.0
 __DEFAULT_MIN_FIBER_LENGTH__ = 20.0
@@ -33,14 +33,39 @@ class TNDtkConnectome(TNConnectome):
             self.max_fiber_length = max_fiber_length
         if min_fiber_length is not None:
             self.min_fiber_length = min_fiber_length
-            
+
+    def add_scalar(self, img, name, aff=None):
+        # load image
+        import nibabel
+        scalar_data = nibabel.load(img).get_data()
+        # if affine is not provided, use inverse of fibers-to-roi-affine
+        if aff is None:
+            aff = numpy.linalg.inv(self.fibers_to_roi_affine)
+        # for every edge calculate the average scalar value for all
+        # streamlines
+        for i,j in self.network.edges_iter():
+            accum_outside = 0.0
+            for streamline in self.network[i][j]['streamlines']:
+                streamline = transform_streamline_by_aff(streamline, aff, self.vox_dims)
+                accum_inside = 0.0
+                for idx in streamline:
+                    try:
+                        accum_inside += scalar_data[tuple(idx)]
+                    except:
+                        print "No data found at %s" % idx
+                        continue
+                accum_outside += accum_inside
+            self.network[i][j][name] = accum_outside
+        
     @property
     def fibers(self):
+        try:
+            if self._fibers is not None:
+                return self._fibers
+        except AttributeError:
+            pass
         if self.fibers_path is not None:
-            try:
-                return TNFibers(filename=self.fibers_path)
-            except Exception, e:
-                raise e
+            return read(self.fibers_path, format='trackvis')
         else:
             return None
         
@@ -50,6 +75,7 @@ class TNDtkConnectome(TNConnectome):
         overwrite previous fibers if one exists.
         
         """
+        self._fibers = None
         self._fibers_file_path = filename
 
     @property
@@ -75,12 +101,12 @@ class TNDtkConnectome(TNConnectome):
             try:
                 return numpy.loadtxt(self.fibers_to_roi_affine_path)
             except:
-                return None
+                return numpy.eye(4) # return identity matrix if none exists
 
     @fibers_to_roi_affine.setter
     def fibers_to_roi_affine(self, new_affine):
         try:
-            new_affine = numpy.asarray(new_affine)
+            new_affine = numpy.loadtxt(new_affine)
             if not new_affine.shape == (4,4):
                 raise Exception("Affine should be a 4x4 matrix.")
             self._fibers_to_roi_affine = new_affine
@@ -94,7 +120,7 @@ class TNDtkConnectome(TNConnectome):
         except:
             return None
 
-    def generate_network(self, overwrite=False, min_length=20, max_length=240, ):
+    def generate_network(self, overwrite=False, min_length=20, max_length=240 ):
         """Generate network. Will not overwrite existing network
         unless overwrite is set to True.
         """
@@ -104,22 +130,29 @@ class TNDtkConnectome(TNConnectome):
         # else...
         print("...loading ROI and Fibers")
         roi_data = self.roi_image.get_data()
-        aff_xform = self.fibers_to_roi_affine
+        streamline_counter = 0
+        total_streamlines = self.fibers.number_of_streamlines
         for streamline in self.fibers.streamlines:
-            len_streamline = length_of_streamline(streamline, vox_dims=self.vox_dims)
+            streamline_counter += 1
+            if streamline_counter % 10000 == 0:
+                if total_streamlines is not None:
+                    print "...%.2f of fibers processed" % (100 * (streamline_counter / float(total_streamlines)))
+                else:
+                    print "...%s fibers have been processed" % streamline_counter
+            streamline = transform_streamline_by_aff(streamline, self.fibers_to_roi_affine)
+            len_streamline = length_of_streamline(streamline)
             if len_streamline >= min_length and len_streamline <= max_length:
-                i_idx = numpy.dot(aff_xform, numpy.append(streamline[0],1))[0:3]
-                j_idx = numpy.dot(aff_xform, numpy.append(streamline[-1],1))[0:3]
-                i_idx -= 0.5 # trackvis uses center of voxel as 0, so
-                j_idx -= 0.5 # we must offset by half a voxel
-                i_value = int(roi_data[tuple(i_idx)])
-                j_value = int(roi_data[tuple(j_idx)])
+                i_value = int(roi_data[tuple(streamline[0])])
+                j_value = int(roi_data[tuple(streamline[-1])])
                 if i_value != 0 and j_value !=0 and i_value != j_value:
                     try:
                         self.network[i_value][j_value]['fiber_count'] += 1
+                        # self.network[i_value][j_value]['streamlines'].append(streamline)
                     except KeyError:
                         self.network.add_edge(i_value, j_value)
                         self.network[i_value][j_value]['fiber_count'] = 1
+                        # self.network[i_value][j_value]['streamlines'] = []
+                        # self.network[i_value][j_value]['streamlines'].append(streamline)
 
     @property
     def max_fiber_length(self):
@@ -141,7 +174,16 @@ class TNDtkConnectome(TNConnectome):
 
     @min_fiber_length.setter
     def min_fiber_length(self, value):
-        self._min_fiber_length
+        self._min_fiber_length = value
+
+    @property
+    def scalars(self):
+        try:
+            if self._scalars is not None:
+                return self._scalars
+        except AttributeError:
+            self._scalars = dict()
+            return self._scalars
     
     @property
     def wm_image(self):
@@ -181,9 +223,8 @@ class TNDtkConnectome(TNConnectome):
         # if filename is still None, we have a problem...
         if filename is None:
             raise Exception("No filename has been provided.")
-        # first let the parent object write
-        TNConnectome.write(self, filename=filename)
-        # then write our additions
+        # SUBCLASS SPECIFIC ITEMS
+        ######################################################################
         # 1) manifest
         self.manifest['MAX_FIBER_LENGTH'] = self.max_fiber_length
         self.manifest['MIN_FIBER_LENGTH'] = self.min_fiber_length
@@ -207,4 +248,6 @@ class TNDtkConnectome(TNConnectome):
             # then we need to copy the wm image to our standard path
             if self.wm_image_path != wm_dest_path:
                 shutil.copyfile(self.wm_image_path, wm_dest_path)
-                
+        # SUPERCLASS WRITE
+        #####################################################################
+        TNConnectome.write(self, filename=filename)

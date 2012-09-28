@@ -1,8 +1,7 @@
-import datetime, networkx, os, pickle, shutil
+import datetime, networkx, numpy, os, pickle, shutil
 from ..images import TNImage
 
 __CLINICAL_INFO_FILENAME__ = 'clinical_info.pickle'
-__DEFAULT_VOX_DIMS__ = [1.0, 1.0, 1.0]
 __MANIFEST_FILENAME__ = 'manifest.pickle'
 __MODIFICATIONS_FILENAME__ = 'modifications.pickle'
 __NETWORK_FILENAME__ = 'graph.gpickle'
@@ -104,7 +103,7 @@ class TNConnectome(object):
             raise Exception('New info must be provided in the form of \
                             a dictionary, or filename of pickled dictionary.')
 
-    def generate_connectome(self):
+    def generate_network(self):
         """Place-holder method. This should be implemented by each
         sub-class.
 
@@ -231,11 +230,14 @@ class TNConnectome(object):
     @property
     def roi_image(self):
         """Return ROI image as TNImage."""
+        try:
+            if self._roi_image is not None:
+                return self._roi_image
+        except AttributeError:
+            pass
         if self.roi_image_path is not None:
-            try:
-                return TNImage(filename=self.roi_image_path)
-            except Exception, e:
-                raise e
+            self._roi_image = TNImage(filename=self.roi_image_path)
+            return self._roi_image
         else:
             print "Connectome has no registered ROI image."
             return None
@@ -246,6 +248,7 @@ class TNConnectome(object):
         will overwrite previous roi_image if one exists.
 
         """
+        self._roi_image = None
         self._roi_image_path = filename
 
     @property
@@ -313,7 +316,11 @@ class TNConnectome(object):
         try:
             return self._vox_dims
         except AttributeError:
-            return __DEFAULT_VOX_DIMS__
+            if self.roi_image is not None:
+                self._vox_dims = numpy.asarray(self.roi_image.get_header().get_zooms())
+                return self._vox_dims
+            else:
+                return None
             
     @property
     def filename(self):
@@ -428,14 +435,14 @@ class TNConnectome(object):
         # create our new shiny connection matrix
         import numpy
         if number_of_nodes is None:
-            n = max(self.nodes())
+            n = max(self.network.nodes())
         else:
             n = number_of_nodes
         new_cmat = numpy.zeros((n,n))
 
         # extract the value for key for every edge in the given connectome
-        for i,j in self.edges_iter():
-            new_cmat[i-1][j-1] = self[i][j][key]
+        for i,j in self.network.edges_iter():
+            new_cmat[i-1][j-1] = self.network[i][j][key]
                 
         # do we need to do anything regarding symmetry?
         if force_symmetric and (new_cmat - new_cmat.T != 0).any():
@@ -631,7 +638,6 @@ def read(filename):
         manifest = pickle.load(manifest_file)
         _version = manifest['VERSION']
         _type = manifest['TYPE']
-        _vox_dims = manifest['VOX_DIMS']
         manifest_file.close()
     except:
         raise Exception("Could not parse manifest belonging to %s." % filename)
@@ -639,12 +645,14 @@ def read(filename):
         raise Exception("Connectome must be version 2.0 or greater")
     if _type == 'DTK':
         from . import TNDtkConnectome
-        return TNDtkConnectome(filename=filename)
+        new_connectome = TNDtkConnectome(filename=filename)
     if _type == 'PROBTRACKX':
         from . import TNProbtrackxConnectome
-        return TNProbtrackxConnectome(filename=filename)
+        new_connectome = TNProbtrackxConnectome(filename=filename)
     # set any properties of the super
-    self._vox_dims = _vox_dims # vox dims
+    # ...
+    # return newly created connectome
+    return new_connectome
 
 ####    
 def generate_connectome(fib, roi_img, node_info=None):

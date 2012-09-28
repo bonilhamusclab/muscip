@@ -142,7 +142,7 @@ class TNConnectomeGroup(object):
         self._info_keys = list()
         for C in self.connectomes():
             try:
-                for key in C.graph['info']:
+                for key in C.clinical_info:
                     if key not in self._info_keys:
                         self._info_keys.append(key)
             except KeyError:
@@ -198,7 +198,7 @@ class TNConnectomeGroup(object):
                     print "No info found in csv file for: %s" % subject
                     continue
                 # apply new info
-                C.set_info(new_info)
+                C.clinical_info = new_info
                 # try to save connectome
                 try:
                     if new_filename:

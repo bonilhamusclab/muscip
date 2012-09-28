@@ -3,16 +3,16 @@ class TNFibers(object):
     """Container class for fibers"""
 
     def __init__(self,
-                 data = None,
                  format = 'trackvis',
                  header = None,
-                 spacing = 'mm'
+                 spacing = 'mm',
+                 streamlines = None
     ):
-        self.data = data
         self.format = format
         self.set_header(header)
         self.set_spacing(spacing)
-        self._load_alternative_spacings()
+        # self._load_alternative_spacings()
+        self._streamlines = streamlines
         
     def get_data(self):
         if self.format == 'trackvis':
@@ -42,6 +42,10 @@ class TNFibers(object):
                 return None
         return None
 
+    @property
+    def number_of_streamlines(self):
+        return self.get_value_for_header_key('n_count')
+                
     def set_dims(self,x,y,z):
         self.set_value_for_header_key('dim',[x,y,z])
         
@@ -76,13 +80,15 @@ class TNFibers(object):
             
     def set_voxel_size(self,x,y,z):
         self.set_value_for_header_key('voxel_size',[x,y,z])
-        
-    def streamlines(self):
-        result = list()
-        for fiber_key, fiber in self.get_data().items():
-            result.append((fiber[self._vertex_key],None,None))
-        return result
 
+    @property
+    def streamlines(self):
+        try:
+            self._streamlines
+            return self._streamlines
+        except AttributeError:
+            return None
+            
     def write(self, filename):
         if self.format == 'trackvis':
             import nibabel.trackvis
@@ -324,7 +330,7 @@ def length_of_streamline(streamline, vox_dims=[1.,1.,1.]):
     '"""
     segments = []
     idx = 0
-    vertices = streamline['vertices_mm']
+    vertices = streamline
     while idx < len(vertices) - 1:
         start = vertices[idx]
         end = vertices[idx+1]
@@ -346,11 +352,14 @@ def read(file, format='trackvis'):
     # TRACKVIS
     if format == 'trackvis':
         import nibabel.trackvis
-        read_data = nibabel.trackvis.read(file)
-        my_data = dict()
-        for idx, rec in enumerate(read_data[0]):
-            my_data[idx] = {'vertices_mm': rec[0]}
-        return TNFibers(data=my_data, format='trackvis', header=read_data[1])
+        data, hdr = nibabel.trackvis.read(file, as_generator=True, points_space='voxel')
+        def streamlines(data):
+            for record in data:
+                yield record[0]
+        return TNFibers(format = 'trackvis',
+                        header = hdr,
+                        spacing = 'mm',
+                        streamlines = streamlines(data))
     # FIBERTOOLS
     if format == 'fiber_tools':
         from scipy.io import loadmat
@@ -389,10 +398,15 @@ def read(file, format='trackvis'):
                                        np.asarray(vertices, dtype=np.float32)}
             streamline_idx += 1
         return TNFibers(data=my_data, format='trackvis', header=my_header, spacing='vox')
-                
-        
 
-
+def transform_streamline_by_aff(streamline, aff):
+    import numpy
+    xStreamline = []
+    for idx in streamline:
+        xIdx = numpy.dot(aff, numpy.append(idx , 1))[0:3]
+        xStreamline.append(xIdx)
+    return xStreamline
+    
 def sum_of_inverse_fiber_lengths(roi_img, endpoints, lengths):
     """For a given ROI atlas and set of fibers, return an adjacency
     matrix where each component(i,j) holds the sum of inverse fiber
