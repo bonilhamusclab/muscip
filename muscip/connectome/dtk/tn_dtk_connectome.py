@@ -8,7 +8,7 @@ __DEFAULT_MIN_FIBER_LENGTH__ = 20.0
 __FIBERS_TO_ROI_AFFINE_FILENAME__ = 'fibers-to-roi-affine.mat'
 __FIBERS_FILENAME__ = 'fibers.trk'
 __TYPE__ = 'DTK'
-__WM_IMAGE_PREFIX__ = 'wm'
+__WM_IMAGE_FILENAME__ = 'wm.nii.gz'
 
 class TNDtkConnectome(TNConnectome):
     
@@ -217,7 +217,7 @@ class TNDtkConnectome(TNConnectome):
             try:
                 found_files = os.listdir(self._filename)
                 for _file in found_files:
-                    if _file.split('.')[0] == __WM_IMAGE_PREFIX__:
+                    if _file == __WM_IMAGE_FILENAME__:
                         return os.path.join(self._filename, _file)
                     # else, we did not find an wm file
                     return None
@@ -256,10 +256,8 @@ class TNDtkConnectome(TNConnectome):
         if self.wm_image is not None:
             # get the file extension of the fdt file, we will use this
             # later
-            wm_file_ext = self.wm_image_path.split('.',1)[1]
             # generate standard path using extension
-            wm_dest_path = os.path.join(filename, "%s.%s" %
-                                         (__WM_IMAGE_PREFIX__, wm_file_ext))
+            wm_dest_path = os.path.join(filename, __WM_IMAGE_FILENAME__)
             # if wm image path is not equal to our standard path,
             # then we need to copy the wm image to our standard path
             if self.wm_image_path != wm_dest_path and os.path.exists(self.wm_image_path):

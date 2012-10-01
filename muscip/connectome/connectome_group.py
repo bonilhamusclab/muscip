@@ -49,20 +49,15 @@ class TNConnectomeGroup(object):
             
     def connectomes(self):
         """Iterate and yield connectomes."""
-        try:
-            for subject in self.subjects:
-                from os.path import join
-                yield con.read_gpickle(join(self.subject_dir,
-                                            subject,
-                                            self.connectome_path))
-        except Exception as e:
-            raise e
+        for subject in self.subjects:
+            from os.path import join
+            yield con.read(join(self.subject_dir, subject, self.connectome_path))
 
     def export_to_matlab(self, filename,
                          number_of_nodes=None,
                          subnetwork_nodes=None):
         structure = dict()
-        structure['Sub'] = list()
+        structure['data'] = list()
         exclude_keys = ['streamlines', 'streamlines_length']
         if number_of_nodes is None:
             number_of_nodes = self.number_of_nodes
@@ -71,7 +66,7 @@ class TNConnectomeGroup(object):
             record = dict()
             for key in self.info_keys:
                 try:
-                    record[key] = connectome.graph['info'][key]
+                    record[key] = connectome.clinical_info[key]
                 except KeyError:
                     record[key] = None
             # grab metrics for connectome
@@ -97,7 +92,7 @@ class TNConnectomeGroup(object):
                 info_keys = list()
                 for C in self.connectomes():
                     try:
-                        for key in C.graph['info'].keys():
+                        for key in C.clinical_info.keys():
                             if key not in info_keys:
                                 info_keys.append(key)
                     except Exception as e:
@@ -108,7 +103,7 @@ class TNConnectomeGroup(object):
                     try:
                         if key not in df.keys():
                             df[key] = list()
-                        df[key].append(C.graph['info'][key])
+                        df[key].append(C.clinical_info[key])
                     except KeyError:
                         continue
                     except Exception as e:
@@ -155,7 +150,7 @@ class TNConnectomeGroup(object):
         self._metric_keys = list()
         try:
             for C in self.connectomes():
-                for u,v,data in C.edges_iter(data=True):
+                for u,v,data in C.network.edges_iter(data=True):
                     for key in data.keys():
                         if key not in self._metric_keys:
                             self._metric_keys.append(key)
@@ -166,7 +161,7 @@ class TNConnectomeGroup(object):
     def guess_number_of_nodes(self):
         guess = 0
         for connectome in self.connectomes():
-            max_node = max(connectome.nodes())
+            max_node = max(connectome.network.nodes())
             if max_node > guess:
                 guess = max_node
         return guess
@@ -174,7 +169,6 @@ class TNConnectomeGroup(object):
     def set_info(self, csvfile, id_key, new_filename=None):
         
             import os.path as op
-            from copy import copy
             # create the csv reader and grab data
             try:
                 import csv
@@ -202,9 +196,7 @@ class TNConnectomeGroup(object):
                 # try to save connectome
                 try:
                     if new_filename:
-                        outpath = op.join(self.subject_dir, subject,
-                                          op.dirname(self.connectome_path),
-                                          new_filename)
+                        outpath = op.join(self.subject_dir, subject, new_filename)
                     else:
                         outpath = op.join(self.subject_dir, subject, self.connectome_path)
                     C.write(outpath)

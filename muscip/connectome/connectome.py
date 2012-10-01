@@ -5,7 +5,7 @@ __CLINICAL_INFO_FILENAME__ = 'clinical_info.pickle'
 __MANIFEST_FILENAME__ = 'manifest.pickle'
 __MODIFICATIONS_FILENAME__ = 'modifications.pickle'
 __NETWORK_FILENAME__ = 'graph.gpickle'
-__ROI_IMAGE_PREFIX__ = 'roi'
+__ROI_IMAGE_FILENAME__ = 'roi.nii.gz'
 __VERSION__ = 2.0
 
 class TNConnectome(object):
@@ -374,7 +374,7 @@ class TNConnectome(object):
             try:
                 found_files = os.listdir(self._filename)
                 for _file in found_files:
-                    if _file.split('.')[0] == __ROI_IMAGE_PREFIX__:
+                    if _file == __ROI_IMAGE_FILENAME__:
                         return os.path.join(self._filename,_file)
                 # didn't find in connectome dir
                 return None
@@ -554,7 +554,7 @@ class TNConnectome(object):
                     new_cmat[i][j] = 0
                 else:
                     try:
-                        new_cmat[i][j] = self[node0][node1][key]
+                        new_cmat[i][j] = self.network[node0][node1][key]
                     except KeyError:
                         pass
                     except Exception, e:
@@ -601,12 +601,8 @@ class TNConnectome(object):
             clinfo_file.close()
         # ROI IMAGE (if needed) #############################################
         if self.roi_image_path is not None:
-            # get the file extension of the roi file, we will use this
-            # later
-            roi_file_ext = self.roi_image_path.split('.',1)[1]
             # generate standard path using extension
-            roi_dest_path = os.path.join(filename, "%s.%s" %
-                                         (__ROI_IMAGE_PREFIX__, roi_file_ext))
+            roi_dest_path = os.path.join(filename, __ROI_IMAGE_FILENAME__)
             # if roi image path is not equal to our standard path,
             # then we need to copy the roi image to our standard path
             if self.roi_image_path != roi_dest_path:
