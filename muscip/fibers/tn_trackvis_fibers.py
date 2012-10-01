@@ -48,7 +48,7 @@ class TNTrackvisFibers(TNFibers):
     @property
     def spacing(self):
         return 'voxel' # for trackvis, we will always handle in voxel
-                       # space
+                       # spacep
 
     @property
     def voxel_size(self):
@@ -62,8 +62,12 @@ class TNTrackvisFibers(TNFibers):
         hdr_mapping = kwargs.get('hdr_mapping', self.hdr)
         points_space = kwargs.get('points_space', 'voxel')
         streamlines = kwargs.get('streamlines', self.fibers)
-        trackvis.write(filename, streamlines, hdr_mapping=hdr_mapping,
-                       endianness=endianness, points_space=points_space)
+        def streamlines_gen(streamlines):
+            for streamline in streamlines:
+                yield (streamline, None, None)
+        trackvis.write(filename, streamlines_gen(streamlines),
+                       hdr_mapping=hdr_mapping, endianness=endianness,
+                       points_space=points_space)
 
     def _trackvis_header_fields(self):
         return {

@@ -3,11 +3,10 @@ from ..connectome import TNConnectome
 from ...images import TNImage
 from ...fibers import fiber_length, read_trackvis, transform_fiber_by_aff
 
-__DEFAULT_MAX_FIBER_LENGTH__ = 200.0
+__DEFAULT_MAX_FIBER_LENGTH__ = 300.0
 __DEFAULT_MIN_FIBER_LENGTH__ = 20.0
 __FIBERS_TO_ROI_AFFINE_FILENAME__ = 'fibers-to-roi-affine.mat'
 __FIBERS_FILENAME__ = 'fibers.trk'
-__FILTERED_FIBERS_FILENAME = ''
 __TYPE__ = 'DTK'
 __WM_IMAGE_PREFIX__ = 'wm'
 
@@ -36,7 +35,7 @@ class TNDtkConnectome(TNConnectome):
             self.min_fiber_length = min_fiber_length
 
     def add_scalar(self, img, name, aff=None):
-        # load image
+        # load inmage
         import nibabel
         scalar_data = nibabel.load(img).get_data()
         # if affine is not provided, use inverse of fibers-to-roi-affine
@@ -121,7 +120,15 @@ class TNDtkConnectome(TNConnectome):
         except:
             return None
 
-    def generate_network(self, overwrite=False, min_length=20, max_length=240 ):
+    @property
+    def filtered_fibers(self):
+        if self.fibers.fibers is not None:
+            fiber_idx = 0
+            for fiber in self.fibers.fibers:
+                if fiber_idx in self.network.graph['filtered_fibers_indices']:
+                    yield fiber
+            
+    def generate_network(self, overwrite=False, min_length=20, max_length=300 ):
         """Generate network. Will not overwrite existing network
         unless overwrite is set to True.
         """
@@ -133,6 +140,7 @@ class TNDtkConnectome(TNConnectome):
         roi_data = self.roi_image.get_data()
         fiber_counter = 0
         total_fibers = self.fibers.number_of_fibers
+        self.network.graph['filtered_fibers_indices'] = []
         for fiber in self.fibers.fibers:
             fiber_counter += 1
             if fiber_counter % 10000 == 0:
@@ -148,13 +156,14 @@ class TNDtkConnectome(TNConnectome):
                 if i_value != 0 and j_value !=0 and i_value != j_value:
                     try:
                         self.network[i_value][j_value]['fiber_count'] += 1
-                        # self.network[i_value][j_value]['fibers'].append(fiber)
+                        self.network[i_value][j_value]['fiber_lengths'].append(len_fiber)
+                        self.network.graph['filtered_fibers_indices'].append(fiber_counter)
                     except KeyError:
                         self.network.add_edge(i_value, j_value)
                         self.network[i_value][j_value]['fiber_count'] = 1
-                        # self.network[i_value][j_value]['fibers'] = []
-                        # self.network[i_value][j_value]['fibers'].append(fiber)
-
+                        self.network[i_value][j_value]['fiber_lengths'] = []
+                        self.network[i_value][j_value]['fiber_lengths'].append(len_fiber)
+                        self.network.graph['filtered_fibers_indices'].append(fiber_counter)
     @property
     def max_fiber_length(self):
         try:
@@ -189,7 +198,10 @@ class TNDtkConnectome(TNConnectome):
     @property
     def wm_image(self):
         try:
-            return TNImage(filename=self.wm_image_path)
+            if self.wm_image_path is not None:
+                return TNImage(filename=self.wm_image_path)
+            else:
+                return None
         except:
             return None
 
@@ -224,6 +236,9 @@ class TNDtkConnectome(TNConnectome):
         # if filename is still None, we have a problem...
         if filename is None:
             raise Exception("No filename has been provided.")
+        # if filename represents a directory, create if it does not exist
+        if not os.path.exists(filename):
+            os.mkdir(filename)
         # SUBCLASS SPECIFIC ITEMS
         ######################################################################
         # 1) manifest
@@ -232,8 +247,8 @@ class TNDtkConnectome(TNConnectome):
         # 2) fibers
         if self.fibers is not None:
             fiber_dest_path = os.path.join(filename, __FIBERS_FILENAME__)
-            if self.fibers_path != fiber_dest_path:
-                self.fibers.write(fiber_dest_path)
+            if self.fibers_path != fiber_dest_path and os.path.exists(self.fibers_path):
+                shutil.copyfile(self.fibers_path, fiber_dest_path)
         # 3) fibers to roi affine
         affine_dest_path = os.path.join(filename, __FIBERS_TO_ROI_AFFINE_FILENAME__)
         numpy.savetxt(affine_dest_path, self.fibers_to_roi_affine, fmt='%f')
@@ -247,7 +262,7 @@ class TNDtkConnectome(TNConnectome):
                                          (__WM_IMAGE_PREFIX__, wm_file_ext))
             # if wm image path is not equal to our standard path,
             # then we need to copy the wm image to our standard path
-            if self.wm_image_path != wm_dest_path:
+            if self.wm_image_path != wm_dest_path and os.path.exists(self.wm_image_path):
                 shutil.copyfile(self.wm_image_path, wm_dest_path)
         # SUPERCLASS WRITE
         #####################################################################
