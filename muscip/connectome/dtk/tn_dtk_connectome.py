@@ -1,7 +1,7 @@
 import numpy, os, shutil
 from ..connectome import TNConnectome
 from ...images import TNImage
-from ...fibers import fiber_length, read_trackvis, transform_fiber_by_aff
+from ...fibers import fiber_length, read_trackvis, transform_fiber_by_aff, write_trackvis
 
 __DEFAULT_MAX_FIBER_LENGTH__ = 300.0
 __DEFAULT_MIN_FIBER_LENGTH__ = 20.0
@@ -267,3 +267,28 @@ class TNDtkConnectome(TNConnectome):
         # SUPERCLASS WRITE
         #####################################################################
         TNConnectome.write(self, filename=filename)
+
+    def write_filtered_fibers(self, filename):
+        """Write a trackvis file populated by fibers from the
+        connectome.
+
+        """
+        hdr = self.fibers.hdr
+        points_space = self.fibers.spacing
+        def streamlines(all_streamlines):
+            streamline_ctx = 0
+            included_fibers = self.network.graph['filtered_fibers_indices']
+            included_fibers_ctx = 0
+            for streamline in all_streamlines:
+                if streamline_ctx == included_fibers[included_fibers_ctx] - 1:
+                    yield streamline
+                    if included_fibers_ctx < len(included_fibers) - 1: 
+                        included_fibers_ctx += 1
+                    # (if this is the last included fiber)
+                    else:
+                        break
+                streamline_ctx += 1
+                
+        streamlines = streamlines(self.fibers.fibers)
+        write_trackvis(filename, hdr_mapping=hdr,
+                       points_space=points_space, streamlines=streamlines)

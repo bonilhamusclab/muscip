@@ -101,3 +101,16 @@ class TNTrackvisFibers(TNFibers):
 def read_trackvis(filename):
     data, hdr = trackvis.read(filename, as_generator=True)
     return TNTrackvisFibers(filename=filename, hdr=hdr)
+
+def write_trackvis(filename, **kwargs):
+    endianness = kwargs.get('endianness', None)
+    hdr_mapping = kwargs.get('hdr_mapping', None)
+    points_space = kwargs.get('points_space', 'voxel')
+    streamlines = kwargs.get('streamlines', [])
+    def streamlines_gen(streamlines):
+        for streamline in streamlines:
+            yield (streamline, None, None)
+    trackvis.write(filename, streamlines_gen(streamlines),
+                   hdr_mapping=hdr_mapping, endianness=endianness,
+                   points_space=points_space)
+    
