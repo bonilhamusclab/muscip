@@ -41,21 +41,35 @@ class TNDtkConnectome(TNConnectome):
         # if affine is not provided, use inverse of fibers-to-roi-affine
         if aff is None:
             aff = numpy.linalg.inv(self.fibers_to_roi_affine)
+        # create a function to map fiber indices to voxel value in
+        # corresponding image
+        def value_at_point(img_data, pt):
+            return img_data[tuple(pt)]
+        # get roi data
+        roi_data = self.roi_image.get_data()
         # for every edge calculate the average scalar value for all
         # fibers
-        for i,j in self.network.edges_iter():
-            accum_outside = 0.0
-            for fiber in self.network[i][j]['fibers']:
-                fiber = transform_fiber_by_aff(fiber, aff, self.vox_dims)
-                accum_inside = 0.0
-                for idx in fiber:
-                    try:
-                        accum_inside += scalar_data[tuple(idx)]
-                    except:
-                        print "No data found at %s" % idx
-                        continue
-                accum_outside += accum_inside
-            self.network[i][j][name] = accum_outside
+        for fiber in self.filtered_fibers:
+            fiber = transform_fiber_by_aff(fiber, aff)
+            u = value_at_point(roi_data, fiber[0])
+            v = value_at_point(roi_data, fiber[-1])
+            inside_accum = 0.0
+            for pt in fiber:
+                inside_accum += value_at_point(scalar_data, pt)
+            avg_value_for_fiber = inside_accum / float(len(fiber))
+            try:
+                self.network[u][v][name] += avg_value_for_fiber
+            except KeyError:
+                try:
+                    self.network[u][v][name] = avg_value_for_fiber
+                except:
+                    print "Could not find edge %s,%s - WHAT IS GOING ON?" % (u,v)
+                    raise
+        # finally, for each edge, we need to divide accumulations by
+        # fiber count to obtain average
+        for u,v,data in self.network.edges_iter(data=True):
+            self.network[u][v][name] = self.network[u][v][name] / \
+                                       float(self.network[u][v]['fiber_count'])
         
     @property
     def fibers(self):
@@ -123,10 +137,22 @@ class TNDtkConnectome(TNConnectome):
     @property
     def filtered_fibers(self):
         if self.fibers.fibers is not None:
-            fiber_idx = 0
+            fiber_ctx = 0
+            filtered_fiber_ctx = 0
+            filtered_fibers_indices = self.network.graph['filtered_fibers_indices']
+            filtered_fiber_count = len(filtered_fibers_indices)
             for fiber in self.fibers.fibers:
-                if fiber_idx in self.network.graph['filtered_fibers_indices']:
-                    yield fiber
+                # TODO: fix this wierd offset after I fix in generate
+                # network method... indexing should start at zero, but
+                # for some odd reason I started at 1 (remember to
+                # confront past-self about this!)
+                if fiber_ctx + 1 == filtered_fibers_indices[filtered_fiber_ctx]:
+                    if filtered_fiber_ctx < filtered_fiber_count - 1 - 1:
+                        filtered_fiber_ctx += 1
+                        yield fiber
+                    else:
+                        break
+                fiber_ctx += 1
             
     def generate_network(self, overwrite=False, min_length=20, max_length=300 ):
         """Generate network. Will not overwrite existing network
@@ -273,20 +299,7 @@ class TNDtkConnectome(TNConnectome):
         """
         hdr = self.fibers.hdr
         points_space = self.fibers.spacing
-        def streamlines(all_streamlines):
-            streamline_ctx = 0
-            included_fibers = self.network.graph['filtered_fibers_indices']
-            included_fibers_ctx = 0
-            for streamline in all_streamlines:
-                if streamline_ctx == included_fibers[included_fibers_ctx] - 1:
-                    yield streamline
-                    if included_fibers_ctx < len(included_fibers) - 1: 
-                        included_fibers_ctx += 1
-                    # (if this is the last included fiber)
-                    else:
-                        break
-                streamline_ctx += 1
-                
-        streamlines = streamlines(self.fibers.fibers)
+        streamlines = self.filtered_fibers
         write_trackvis(filename, hdr_mapping=hdr,
                        points_space=points_space, streamlines=streamlines)
+

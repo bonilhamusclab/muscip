@@ -561,6 +561,9 @@ class TNConnectome(object):
                         raise e
         return new_cmat
 
+    # BUG: write is failing when used w/out a filename... for now
+    # workaround is to always write to a new file, but this will need
+    # to fixed as soon as possible to avoid error and confusion
     def write(self, filename=None):
         """Write connectome to the given filename, do not need to
         provide filename if we are saving to same file from which we
