@@ -317,8 +317,8 @@ def dilate_rois(roi_img, iterations=1, mask=None, output=None):
                 if dil_data[voxel] > 0 and dil_data[voxel] != label:
                     dil_data[voxel] = 0
                 # else, this is the first time we are visiting this
-                # voxel, and if it is within the mask, let's assign the value
-                if mask_data[voxel] > 0:
+                # voxel let's assign the value
+                else:
                     dil_data[voxel] = label
     # generate output
     out_img = nibabel.Nifti1Image(dil_data, affine, header)
