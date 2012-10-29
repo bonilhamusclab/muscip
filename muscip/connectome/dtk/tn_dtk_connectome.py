@@ -212,6 +212,42 @@ class TNDtkConnectome(TNConnectome):
     def min_fiber_length(self, value):
         self._min_fiber_length = value
 
+    def populate_hagmann_density(self):
+        """Add an entry for hagman density for each entry. Need to add
+        complete description and reference. This method requires the
+        connectome to have both roi and wm image defined.
+
+        """
+        # check that we have required data to proceed
+        if self.wm_image is None or self.roi_image is None:
+            print "Need to have defined ROI and WM before density can be extracted."
+            return
+        # define method for summing the inverse lengths of all
+        # streamlines for a given edge
+        def inverse_sum(streamlines):
+            inverse_streamlines = []
+            for streamline in streamlines:
+                inverse_streamlines.append( 1.0 / streamline )
+            from math import fsum
+            return fsum(inverse_streamlines)
+        # get surface areas for ROIs
+        from ...images import surface_area_for_rois
+        surface_area = surface_area_for_rois(self.roi_image, self.wm_image)
+        # make sure surface areas are well formed (no zero values) by
+        # adding a small epsilon value to any zeros
+        epsilon = 0.000000001
+        for n in self.network.nodes():
+            try:
+                surface_area[n]
+            except KeyError:
+                surface_area[n] = epsilon
+        # for every edge in network...
+        for i,j in self.network.edges_iter():
+            # calculate hagmann density and add to data structure
+            hd = ((2.0 / (surface_area[i] + surface_area[j])) * \
+                  inverse_sum(self.network[i][j]['fiber_lengths']))
+            self.network[i][j]['hagmann_density'] = hd
+                
     @property
     def scalars(self):
         try:
