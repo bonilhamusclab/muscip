@@ -58,7 +58,7 @@ class TNConnectomeGroup(object):
                          subnetwork_nodes=None):
         structure = dict()
         structure['data'] = list()
-        exclude_keys = ['streamlines', 'streamlines_length']
+        exclude_keys = ['streamlines', 'streamlines_length', 'fiber_lengths']
         if number_of_nodes is None:
             number_of_nodes = self.number_of_nodes
         for connectome in self.connectomes():
@@ -78,7 +78,7 @@ class TNConnectomeGroup(object):
                                                             number_of_nodes=number_of_nodes)
                 else:
                     record[key] = connectome.submatrix_for_key(subnetwork_nodes, key)
-            structure['Sub'].append(record)
+            structure['data'].append(record)
             from scipy.io import savemat
             savemat(filename, structure)
         
