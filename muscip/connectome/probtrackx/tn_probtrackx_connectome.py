@@ -58,15 +58,30 @@ class TNProbtrackxConnectome(TNConnectome):
             except:
                 return None
 
-    def generate_network(self, overwrite=False):
+    def generate_network(self, overwrite=False, matrix=None):
         """Generate network. Will not overwrite existing network
         unless overwrite is set to True.
+
+        Input::
+
+          overwrite: overwrite existing network
+        
+          matrix: If an adjacency matrix is provided, simply transfer
+          the contents of the matrix to the network, rather than
+          exctract all info from the fdt image. This can be done when
+          matrix is pre-computed, possibly on a cluster.
 
         """
         if not overwrite and self.network.size() > 0:
             raise Exception("If you wish to overwrite existing \
                             network, you must explicity set overwrite=False")
-        # else...
+        else:
+            # zero-out network so that we start with clean slate
+            self.network = networkx.Graph()
+        if matrix is not None:
+            self._generate_network_from_matrix(matrix)
+            return
+        # else, we are generating network from fdt and roi images...
         print("...loading ROI and Fiber Distribution images")
         roi_data = self.roi_image.get_data()
         rois = numpy.unique(roi_data[numpy.where(roi_data != 0)])
@@ -87,20 +102,8 @@ class TNProbtrackxConnectome(TNConnectome):
                 # else
                 # get fiber count
                 fiber_count = fdt_volume[numpy.where(roi_data == target)].sum()
-                # 1) Edge exists
-                try:
-                    # This is the case where we have already recorded
-                    # i -> j and now must figure the average of i -> j
-                    # and j -> i. Because this graph type is
-                    # non-directed, setting ij also effectively sets
-                    # ji
-                    self.network[seed][target]['fiber_count'] += fiber_count
-                    self.network[seed][target]['fiber_count'] /= 2.0
-                # 2) Edge does not exist
-                except KeyError:
-                    # In this case we can simply add the edge along
-                    # with the given fiber count
-                    self.network.add_edge(seed, target, {'fiber_count': fiber_count})
+                # and add fiber count to edge
+                self._add_edge_value_for_key(seed,target,'fiber_count',fiber_count)
             
     def write(self, filename=None):
         """Write connectome to the given filename, do not need to
@@ -129,3 +132,30 @@ class TNProbtrackxConnectome(TNConnectome):
             # then we need to copy the fdt image to our standard path
             if self.fdt_image_path != fdt_dest_path:
                 shutil.copyfile(self.fdt_image_path, fdt_dest_path)
+
+    def _add_edge_value_for_key(self,m,n,key,value):
+        # 1) Edge exists
+        try:
+            # This is the case where we have already recorded i -> j
+            # and now must figure the average of i -> j and j ->
+            # i. Because this graph type is non-directed, setting ij
+            # also effectively sets ji
+            self.network[m][n][key] += value
+            self.network[m][n][key] /= 2.0
+        # 2) Edge does not exist
+        except KeyError:
+            # In this case we can simply add the edge along
+            # with the given fiber count
+            self.network.add_edge(m, n, {key: value})
+
+    def _generate_network_from_matrix(self, matrix):
+        if len(matrix.shape) != 2 or matrix.shape[0] != matrix.shape[1]:
+            raise Exception("Matrix must be an NxN adjancency matrix")
+        elements = matrix.shape[0]
+        for m in range(0,elements):
+            for n in range(0,elements):
+                if m == n:
+                    continue
+                if matrix[m][n] > 0:
+                    # add (to) edge
+                    self._add_edge_value_for_key(m+1,n+1,'fiber_count',matrix[m][n])
