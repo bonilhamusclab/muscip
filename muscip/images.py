@@ -350,7 +350,85 @@ def dilate_rois(roi_img, iterations=1, mask=None, output=None):
     else:
         nibabel.save(out_img, output)
         return None
+
+def generate_masks_from_roi_list(roi_list=None, fa_map=None, threshold=0.2, flip_y=True, units='VOX', outdir=None):
+    """For each ROI in the list, create a mask where every voxel
+    inside the spherical radius of the ROI is included in the mask if
+    the value for FA in the subject's FA map is greater than the given
+    threshold. In this way we can provide large spherical ROIs in
+    order to deal with less than perfect registration, yet still
+    restrict the ROIs to meaningful anatomical areas by thresholding
+    FA.
+
+    Input::
     
+      roi_list - list of spherical ROIs following the form:
+      name,x,y,z,r where name represents name of the mask, xyz are
+      voxel coordinates and r is the radius of the sphere in
+      millimeters
+      
+      fa_map - subject specific FA map in the same relative space as
+      ROIs are defined
+
+      threshold - required FA value for voxel to be included in mask
+      (default = 0.2)
+
+      pixdims - pixel dimensions of the fa_map; this enables us to
+      provide the radius in millimeters in the case that the 
+
+      flip_y - trackvis flips Anterior/Posterior, so if coordinates
+      were defined using Trackvis, we need to flip our y coordinate
+      (default = True)
+
+      units - units in which coordinates and radii are defined, must
+      be one of { 'VOX' | 'MM' } (default = 'VOX')
+
+      outdir - directory in which to write masks
+
+    """
+    from math import ceil, floor, sqrt
+
+    roi_file = open(roi_list, 'rb')
+    fa_img = nibabel.load(fa_map)
+    fa_data = fa_img.get_data()
+    voxdims = np.asarray(fa_img.get_header().get_zooms())
+    min_voxdim = voxdims.min()
+    if units == 'MM':
+        scale_factor = ceil(1.0 / min_voxdim)
+    else:
+        scale_factor = 1.0
+
+    def _euclidian_dist(index1, index2):
+        x1, y1, z1 = index1
+        x2, y2, z2 = index2
+        return sqrt( (x2-x1)**2 + (y2-y1)**2 + (z2-z1)**2 )
+
+    for entry in roi_file.readlines():
+        name, x, y, z, r = entry.split(',')
+        x = int( floor( float(x) * scale_factor ) )
+        y = int( floor( float(y) * scale_factor ) )
+        if flip_y:
+            # trackvis flips Anterior/Posterior, so if coordinates
+            # were defined using Trackvis, we need to flip our y
+            # coordinate
+            y = int( voxdims[1] * scale_factor - y )
+        z = int( floor( float(z) * scale_factor ) )
+        r =  float(r) * scale_factor
+        offset = int( ceil( r ) )
+        mask_data = np.zeros(fa_img.shape)
+        print "Processing ROI: %s" % name
+
+        for x_hat in range(x-offset, x+offset):
+            for y_hat in range(y-offset, y+offset):
+                for z_hat in range(z-offset, z+offset):
+                    if _euclidian_dist( (x,y,z), (x_hat,y_hat,z_hat) ) <= r:
+                        if fa_data[x_hat,y_hat,z_hat] >= threshold:
+                            mask_data[x_hat,y_hat,z_hat] = 1
+
+        mask_img = nibabel.Nifti1Image(mask_data, fa_img.get_affine())
+        nibabel.save(mask_img, '%s/%s.nii.gz' % (outdir, name))
+    roi_file.close()
+
 def get_wm_neighbors_for_value(ROI_img, WM_img, value):
     """Return the indices of all voxels in the ROI with the given
     value, which are adjacent to a white matter voxel (a voxel with a
