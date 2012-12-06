@@ -582,6 +582,85 @@ def neighbors_with_value(img, voxel, value):
                     pass # nothing to do, this is normal for edge cases
     return results
 
+def parcellate_mask(mask_img, number_of_parcels, basename=None, outdir=None):
+    """Take a given mask and parcel it into a given number of parcels,
+    so that each parcel contains an (almost) equal number of non-zero
+    voxels. This is done to facilitate parallel processing of the type
+    where each voxel is processed independently and an image can be
+    divided into multiple images, and the output of each can be summed
+    to obtain the equivalent output of the whole.
+
+    Inputs::
+    
+      mask_img - an image containing zero and non-zero voxels to be
+      dispersed amongst n-images
+
+      number_of_parcels - number of images which to parcel out
+      non-zero voxels
+
+      basename - basename of the output images, if not provided,
+      basename of original image will be used; incremented integers
+      will be appended to each image
+
+      outdir - directory in which to place images, if not provided
+      will use directory at point
+
+    """
+    # load mask img
+    if isinstance(mask_img, basestring):
+        orig_img = nibabel.load(mask_img)
+        orig_data = orig_img.get_data()
+        orig_filename = mask_img
+        aff = orig_img.get_affine()
+    if isinstance(mask_img, TNImage):
+        orig_data = mask_img._base.get_data()
+        orig_filename = mask_img._base.get_filename()
+        aff = orig_img._base.get_affine()
+    if isinstance(mask_img, np.ndarray):
+        orig_data = img
+        aff = np.ones((4,4), dtype=np.int8)
+    # we assume the mask to be a three dimensional image... if this is
+    # not true, lets throw an exception
+    if len( orig_data.shape ) != 3:
+        raise Exception("For the time being, this function only operates on 3dim images.")
+    # if no basename has been provided, get the base name of the mask
+    # image
+    if basename is None:
+        import os.path as op
+        basename = op.basename(mask_filename).split('.', 1)[0]
+    # if no outdir has been provided use the directory at point
+    if outdir is None:
+        outdir = op.abspath('.')
+    # round up all the non-zero voxels, and while we're at it, wez
+    # better cout'em
+    nonzero_voxels = np.where(orig_data != 0)
+    nonzero_voxel_count = len(nonzero_voxels[0])
+    # create our shiny new data (empty for now)
+    new_data = np.zeros(orig_data.shape + tuple([number_of_parcels]))
+    # for each index in our nonzero indices
+    idx = 0
+    while idx < nonzero_voxel_count:
+        parcel = 0
+        while parcel < number_of_parcels and idx < nonzero_voxel_count:
+            x,y,z = nonzero_voxels[0][idx], nonzero_voxels[1][idx], nonzero_voxels[2][idx]
+            new_data[x,y,z,parcel] = orig_data[x,y,z]
+            parcel += 1
+            idx += 1
+    # for each of our parcels, output an image
+    num_digits = len( str( number_of_parcels + 1 ) ) # determine the
+                                                     # number of
+                                                     # digits for our
+                                                     # incrementer so
+                                                     # that we can
+                                                     # zero pad nicely
+    for i in range( 1, number_of_parcels + 1 ):
+        suffix = str(i).zfill(num_digits)
+        import os.path as op
+        outfile = '%s_%s.nii.gz' % ( op.join( outdir, basename ),suffix )
+        outdata = new_data[...,i-1]
+        new_img = nibabel.Nifti1Image(outdata, aff)
+        nibabel.save(new_img, outfile)
+    
 def voxel_has_neighbor_with_value(test_img_data, voxel_idx, target_value):
     search_space = [-1,0,1]
     me = tuple(voxel_idx)
