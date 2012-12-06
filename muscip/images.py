@@ -351,6 +351,81 @@ def dilate_rois(roi_img, iterations=1, mask=None, output=None):
         nibabel.save(out_img, output)
         return None
 
+def erode_rois(roi_img, iterations=1, mask=None, output=None):
+    """Erode an image by zero'ing every voxel that is adjacent to a
+    voxel having a value not equal to that of itself.
+
+    Input::
+
+      roi_img: roi image consiting of integer labeled voxels, which to
+      erode
+
+      iterations: number of times to perform dilation; 2 iterations
+      would consist of eroding once, then eroding the eroded rois
+      once more, default=1
+
+      mask: Binary mask image that must be same dimensions as
+      roi_img. If provided, this will limit the voxels considerd for
+      eroision to the non-zero voxels in the mask
+
+      output: if provided, save the result to filename provided, else
+      return result as image.
+
+    """
+    affine = None
+    header = None
+    if isinstance(roi_img, basestring):
+        roi_img = nibabel.load(roi_img)
+    if isinstance(roi_img, nibabel.spatialimages.SpatialImage):
+        affine = roi_img.get_affine()
+        header = roi_img.get_header()
+        roi_data = roi_img.get_data()
+    else:
+        raise Exception("Do not understand ROI image format.")
+    if mask is not None:
+        if isinstance(mask, basestring):
+            mask = nibabel.load(mask)
+        mask_data = mask.get_data()
+    else:
+        mask_data = np.ones(roi_data.shape, dtype=np.int8)
+    for i in range(0,iterations):
+        # for each iteration, bookmark a start point using our roi data
+        from copy import copy
+        start_data = copy(roi_data)
+        for x in range(0, roi_data.shape[0]):
+            for y in range(0, roi_data.shape[1]):
+                for z in range(0, roi_data.shape[2]):
+                    # if the voxel is non zero and in the inclusion mask
+                    voxel_value = roi_data[x,y,z]
+                    if voxel_value != 0 and mask_data[x,y,z] > 0:
+                        # if the voxel has a neighbor not equal to itself,
+                        # then it must be zero'd... off with its bits!
+                        # ...first get valid parameters for our local
+                        # neighborhood
+                        low = np.array([x,y,z]) - 1
+                        high = np.array([x,y,z]) + 2 # plus two, because
+                        # top of range is
+                        # non-inclusive
+                        # handle any cases where the neighborhood range
+                        # extends beyond the bounds of original image
+                        # space
+                        for i in xrange(3):
+                            if low[i] < 0:
+                                low[i] = 0
+                            if high[i] > roi_data.shape[i]:
+                                high[i] = roi_data.shape[i]
+                        local_neighborhood = start_data[low[0]:high[0],low[1]:high[1],low[2]:high[2]]
+                        # check the neighborhood for outcasts
+                        if (local_neighborhood != voxel_value).any():
+                            roi_data[x,y,z] = 0 # off with its bits!
+    # generate output
+    out_img = nibabel.Nifti1Image(roi_data, affine, header)
+    if output is None:
+        return out_img
+    else:
+        nibabel.save(out_img, output)
+        return None
+
 def generate_masks_from_roi_list(roi_list=None, fa_map=None, threshold=0.2, flip_y=True, units='VOX', outdir=None):
     """For each ROI in the list, create a mask where every voxel
     inside the spherical radius of the ROI is included in the mask if
