@@ -426,7 +426,7 @@ def erode_rois(roi_img, iterations=1, mask=None, output=None):
         nibabel.save(out_img, output)
         return None
 
-def generate_masks_from_roi_list(roi_list=None, fa_map=None, threshold=0.2, flip_y=True, units='VOX', outdir=None):
+def generate_masks_from_roi_list(roi_list=None, fa_map=None, threshold=0.2, flip_x=False, flip_y=False, units='VOX', outdir=None):
     """For each ROI in the list, create a mask where every voxel
     inside the spherical radius of the ROI is included in the mask if
     the value for FA in the subject's FA map is greater than the given
@@ -451,9 +451,13 @@ def generate_masks_from_roi_list(roi_list=None, fa_map=None, threshold=0.2, flip
       pixdims - pixel dimensions of the fa_map; this enables us to
       provide the radius in millimeters in the case that the 
 
+      flip_x - if needed flip the x axis, I've encountered this before
+      when defining in mricron that the x-axis needs to be flipped
+      (default = False)
+
       flip_y - trackvis flips Anterior/Posterior, so if coordinates
       were defined using Trackvis, we need to flip our y coordinate
-      (default = True)
+      (default = False)
 
       units - units in which coordinates and radii are defined, must
       be one of { 'VOX' | 'MM' } (default = 'VOX')
@@ -481,6 +485,10 @@ def generate_masks_from_roi_list(roi_list=None, fa_map=None, threshold=0.2, flip
     for entry in roi_file.readlines():
         name, x, y, z, r = entry.split(',')
         x = int( floor( float(x) * scale_factor ) )
+        if flip_x:
+            # flip x if required, I've needed to do this in the past
+            # after defining coordinates in mricron
+            x = int( voxdims[0] * scale_factor - x )
         y = int( floor( float(y) * scale_factor ) )
         if flip_y:
             # trackvis flips Anterior/Posterior, so if coordinates
