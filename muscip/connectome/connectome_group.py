@@ -19,9 +19,21 @@ class TNConnectomeGroup(object):
         self.subject_dir = op.abspath(subject_dir)
         self.subjects = subjects
         self.connectome_path = connectome_path
+        self._count = None
         self._info_keys = None
         self._metric_keys = None
         self._number_of_nodes = None
+
+    @property
+    def count(self):
+        if self._count:
+            return self._count
+        else:
+            ctx = 0
+            for con in self.connectomes():
+                ctx += 1
+            self._count = ctx
+            return self._count
 
     @property
     def info_keys(self):
@@ -166,6 +178,49 @@ class TNConnectomeGroup(object):
                 guess = max_node
         return guess
 
+    def qa_image(self, filename=None, show=True, size=(10,10), title=None):
+        """Display or save a figure of all the log fiber count
+        matrices in the connectome group. This can be used to quickly
+        spot outlies where problems may exist.
+
+        Input::
+
+          filename - filename to save output image, image will not be
+          saved to disk if filename is not provided
+
+          show - show the figure in a window
+
+          size - tuple in inches representing the size of the image
+
+          title - title to place on the figure as a whole
+
+        """
+        import matplotlib.pyplot as plot, math, numpy as np, warnings
+        FIBER_COUNT_KEY = "fiber_count"
+        ncols = int(math.ceil(math.sqrt(self.count)))
+        fig = plot.figure(figsize=size)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            for i, c in enumerate(self.connectomes()):
+                # get the adjacency matrix of the natural log of fiber counts
+                mat = c.matrix_for_key(FIBER_COUNT_KEY)
+                mat = np.log(mat)
+                mat[np.where(mat < 0)] = 0
+                ax = fig.add_subplot(ncols,ncols,i+1)
+                ax.imshow(mat, interpolation="nearest")
+                try:
+                    ax.set_title(c.subject_id, size='x-small')
+                except Exception, e:
+                    pass
+                ax.get_xaxis().set_visible(False)
+                ax.get_yaxis().set_visible(False)
+        if title:
+            fig.suptitle(title, size='x-large')
+        if filename:
+            fig.savefig(filename, orientation='landscape')
+        if show:
+            plot.show()
+        
     def set_info(self, csvfile, id_key, new_filename=None):
         
             import os.path as op
