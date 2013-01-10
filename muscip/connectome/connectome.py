@@ -103,6 +103,15 @@ class TNConnectome(object):
             raise Exception('New info must be provided in the form of \
                             a dictionary, or filename of pickled dictionary.')
 
+    @property
+    def fiber_lengths(self):
+        """Return all of the connectomes fiber length values as a
+        single vector"""
+        _fiber_lengths = []
+        for u, v, data in self.network.edges_iter(data=True):
+            _fiber_lengths += data['fiber_lengths']
+        return _fiber_lengths
+        
     def generate_network(self):
         """Place-holder method. This should be implemented by each
         sub-class.

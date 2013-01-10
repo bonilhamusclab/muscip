@@ -66,6 +66,7 @@ class TNConnectomeGroup(object):
             yield con.read(join(self.subject_dir, subject, self.connectome_path))
 
     def export_to_matlab(self, filename,
+                         fiber_length_histo=False,
                          number_of_nodes=None,
                          subnetwork_nodes=None):
         structure = dict()
@@ -90,6 +91,15 @@ class TNConnectomeGroup(object):
                                                             number_of_nodes=number_of_nodes)
                 else:
                     record[key] = connectome.submatrix_for_key(subnetwork_nodes, key)
+                # add fiber length histograms if requested
+                if fiber_length_histo:
+                    from scipy.stats import histogram as histo
+                    import numpy as np
+                    hist,_,_,_ = histo(connectome.fiber_lengths,
+                                       numbins = 23,
+                                       defaultlimits = (10,240))
+                    norm_hist = hist / np.sum(hist)
+                    record['fiber_length_hist'] = norm_hist
             structure['data'].append(record)
             from scipy.io import savemat
             savemat(filename, structure)
