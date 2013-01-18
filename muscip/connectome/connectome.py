@@ -105,7 +105,7 @@ class TNConnectome(object):
 
     @property
     def fiber_lengths(self):
-        """Return all of the connectomes fiber length values as a
+        """Return all of the connectomes streamline length values as a
         single vector"""
         _fiber_lengths = []
         for u, v, data in self.network.edges_iter(data=True):
