@@ -176,20 +176,25 @@ class TNDtkConnectome(TNConnectome):
                     print "...%s fibers have been processed" % fiber_counter
             # fiber = transform_fiber_by_aff(fiber, self.fibers_to_roi_affine)
             len_fiber = fiber_length(fiber)
-            if len_fiber >= min_length and len_fiber <= max_length:
-                i_value = int(roi_data[tuple(fiber[0])])
-                j_value = int(roi_data[tuple(fiber[-1])])
-                if i_value != 0 and j_value !=0 and i_value != j_value:
-                    try:
-                        self.network[i_value][j_value]['fiber_count'] += 1
-                        self.network[i_value][j_value]['fiber_lengths'].append(len_fiber)
-                        self.network.graph['filtered_fibers_indices'].append(fiber_counter)
-                    except KeyError:
-                        self.network.add_edge(i_value, j_value)
-                        self.network[i_value][j_value]['fiber_count'] = 1
-                        self.network[i_value][j_value]['fiber_lengths'] = []
-                        self.network[i_value][j_value]['fiber_lengths'].append(len_fiber)
-                        self.network.graph['filtered_fibers_indices'].append(fiber_counter)
+            try:
+                if len_fiber >= min_length and len_fiber <= max_length:
+                    i = tuple(fiber[0])
+                    j = tuple(fiber[-1])
+                    i_value = int(roi_data[i])
+                    j_value = int(roi_data[j])
+                    if i_value != 0 and j_value !=0 and i_value != j_value:
+                        try:
+                            self.network[i_value][j_value]['fiber_count'] += 1
+                            self.network[i_value][j_value]['fiber_lengths'].append(len_fiber)
+                            self.network.graph['filtered_fibers_indices'].append(fiber_counter)
+                        except KeyError:
+                            self.network.add_edge(i_value, j_value)
+                            self.network[i_value][j_value]['fiber_count'] = 1
+                            self.network[i_value][j_value]['fiber_lengths'] = []
+                            self.network[i_value][j_value]['fiber_lengths'].append(len_fiber)
+                            self.network.graph['filtered_fibers_indices'].append(fiber_counter)
+            except IndexError:
+                print "i: %s, j: %s" % (i,j)
     @property
     def max_fiber_length(self):
         try:
