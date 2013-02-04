@@ -174,7 +174,7 @@ class TNDtkConnectome(TNConnectome):
                     print "...%.2f%% of fibers processed" % (100 * (fiber_counter / float(total_fibers)))
                 else:
                     print "...%s fibers have been processed" % fiber_counter
-            fiber = transform_fiber_by_aff(fiber, self.fibers_to_roi_affine)
+            # fiber = transform_fiber_by_aff(fiber, self.fibers_to_roi_affine)
             len_fiber = fiber_length(fiber)
             if len_fiber >= min_length and len_fiber <= max_length:
                 i_value = int(roi_data[tuple(fiber[0])])
