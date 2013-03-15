@@ -3,6 +3,7 @@ from ..connectome import TNConnectome
 from ...images import TNImage
 
 __FDT_IMAGE_PREFIX__ = 'fdt'
+__WM_IMAGE_FILENAME__ = 'wm.nii.gz'
 __TYPE__ = 'PROBTRACKX'
 
 class TNProbtrackxConnectome(TNConnectome):
@@ -10,11 +11,15 @@ class TNProbtrackxConnectome(TNConnectome):
     def __init__(self,
                  filename=None,
                  fdt_image=None,
-                 roi_image=None ):
+                 roi_image=None,
+                 wm_image=None
+                 ):
         TNConnectome.__init__(self, filename=filename, roi_image=roi_image)
         self.type = __TYPE__
         if fdt_image is not None:
             self.fdt_image = fdt_image
+        if wm_image is not None:
+            self.wm_image = wm_image
 
     @property
     def fdt_image(self):
@@ -55,6 +60,35 @@ class TNProbtrackxConnectome(TNConnectome):
                         return os.path.join(self._filename,_file)
                 # didn't find in connectome dir
                 return None
+            except:
+                return None
+
+    @property
+    def wm_image(self):
+        try:
+            if self.wm_image_path is not None:
+                return TNImage(filename=self.wm_image_path)
+            else:
+                return None
+        except:
+            return None
+
+    @wm_image.setter
+    def wm_image(self, filename):
+        self._wm_image_path = filename
+
+    @property
+    def wm_image_path(self):
+        try:
+            return self._wm_image_path
+        except AttributeError:
+            try:
+                found_files = os.listdir(self._filename)
+                for _file in found_files:
+                    if _file == __WM_IMAGE_FILENAME__:
+                        return os.path.join(self._filename, _file)
+                    # else, we did not find an wm file
+                    return None
             except:
                 return None
 
@@ -105,6 +139,32 @@ class TNProbtrackxConnectome(TNConnectome):
                 # and add fiber count to edge
                 self._add_edge_value_for_key(seed,target,'fiber_count',fiber_count)
             
+    def populate_density(self):
+        """Add an entry for density for each edge. TODO: add complete
+        description and reference. This method requires the connectome
+        to have both roi and wm image defined."""
+        # check that both wm and roi are defined
+        if self.wm_image is None or self.roi_image is None:
+            print "Need to have defined ROI and WM before density can be extracted."
+            return
+        # get surface areas for ROIs
+        from ...images import surface_area_for_rois
+        surface_area = surface_area_for_rois(self.roi_image, self.wm_image)
+        # make sure surface areas are well formed (no zero values) by
+        # adding a small epsilon value to any zeros
+        epsilon = 0.000000001
+        for n in self.network.nodes():
+            try:
+                surface_area[n]
+            except KeyError:
+                surface_area[n] = epsilon
+        # for every edge in network...
+        for i,j in self.network.edges_iter():
+            # calculate hagmann density and add to data structure
+            density = self.network[i][j]['fiber_count'] / \
+                float( surface_area[i] + surface_area[j] )
+            self.network[i][j]['density'] = density
+
     def write(self, filename=None):
         """Write connectome to the given filename, do not need to
         provide filename if we are saving to same file from which we
@@ -132,6 +192,17 @@ class TNProbtrackxConnectome(TNConnectome):
             # then we need to copy the fdt image to our standard path
             if self.fdt_image_path != fdt_dest_path:
                 shutil.copyfile(self.fdt_image_path, fdt_dest_path)
+        # WM IMAGE (if needed) 
+        if self.wm_image is not None:
+            # get the file extension of the fdt file, we will use this
+            # later
+            # generate standard path using extension
+            wm_dest_path = os.path.join(filename, __WM_IMAGE_FILENAME__)
+            # if wm image path is not equal to our standard path,
+            # then we need to copy the wm image to our standard path
+            if self.wm_image_path != wm_dest_path and os.path.exists(self.wm_image_path):
+                shutil.copyfile(self.wm_image_path, wm_dest_path)
+
 
     def _add_edge_value_for_key(self,m,n,key,value):
         # 1) Edge exists
