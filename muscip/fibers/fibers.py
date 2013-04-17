@@ -4,6 +4,7 @@ class TNFibers(object):
 
     def __init__(self, **kwargs):
         self._filename = kwargs.get('filename', None)
+        self._fibers = kwargs.get('fibers', None)
 
     @property
     def fibers(self):
