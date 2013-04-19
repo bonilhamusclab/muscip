@@ -12,18 +12,12 @@ class TNTrackvisFibers(TNFibers):
 
     @property
     def fibers(self):
-        try:
-            return self._fibers
-        except AttributeError:
-            try:
-                def fibers_generator(fibers):
-                    for rec in fibers:
-                        yield rec[0]
-                data, hdr = trackvis.read(self._filename, as_generator=True,
-                                          points_space='voxel')
-                return fibers_generator(data)
-            except:
-                return None
+        def fibers_generator(fibers):
+            for rec in fibers:
+                yield rec[0]
+        data, hdr = trackvis.read(self._filename, as_generator=True,
+                                  points_space='voxel')
+        return fibers_generator(data)
 
     @property
     def hdr(self):

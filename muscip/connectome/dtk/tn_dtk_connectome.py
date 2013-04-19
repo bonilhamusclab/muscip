@@ -170,7 +170,7 @@ class TNDtkConnectome(TNConnectome):
         for fiber in self.fibers.fibers:
             fiber_counter += 1
             if fiber_counter % 10000 == 0:
-                if total_fibers is not None:
+                if total_fibers is not None and total_fibers != 0:
                     print "...%.2f%% of fibers processed" % (100 * (fiber_counter / float(total_fibers)))
                 else:
                     print "...%s fibers have been processed" % fiber_counter
