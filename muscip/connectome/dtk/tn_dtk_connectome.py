@@ -33,6 +33,12 @@ class TNDtkConnectome(TNConnectome):
             self.max_fiber_length = max_fiber_length
         if min_fiber_length is not None:
             self.min_fiber_length = min_fiber_length
+        if float(self.version) < 3.0:
+            print "Upgrading connectome to 3.0... re-generating network"
+            self.generate_network(overwrite=True,
+                                  min_length=self.min_fiber_length,
+                                  max_length=self.max_fiber_length)
+            self.version = 3.0
 
     def add_scalar(self, img, name, aff=None):
         # load inmage
@@ -71,6 +77,57 @@ class TNDtkConnectome(TNConnectome):
             self.network[u][v][name] = self.network[u][v][name] / \
                                        float(self.network[u][v]['fiber_count'])
         
+    def centroids_for_region_pairs(self, min_numfib=10, group_connectome=None):
+        """Return a dictionary where streamlines between region a and
+        region b are represented as a single list of points
+        representing the centroid.
+
+        PARAMS
+        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+        min_numfib - create a centroid for a region pair if and only
+                     if the fiber count for said pair is greater than
+                     or equal than this number.
+
+        group_connectome - if defined, the average length will be
+                           taken from this connectome rather than the
+                           one we are currently operating upon. this
+                           is useful in group analysis when we might
+                           like to force all the centroids of
+                           individuals to have the same number of
+                           points, and we do so by feeding our
+                           centroid generating function the same
+                           length factor.
+
+        """
+
+        from ...fibers import centroid_for_tracks
+
+        # start with an empty dictionary for our centroids
+        centroids = dict()
+
+        for u,v,data in self.network.edges_iter(data=True):
+            print "Generating centroid for regions [ %s -- %s ]" % (u,v)
+            if data['fiber_count'] >= min_numfib:
+                # if a group connectome was provided, use the average
+                # of fibers for u,v as the length factor for the
+                # centroid generation
+                if group_connectome is not None:
+                    avg_length = numpy.mean(group_connectome.network[u][v]['fiber_lengths'])
+                    thisCentroid = centroid_for_tracks(self.tracks_for_regions(u,v),
+                                                       length_factor=avg_length)
+                # otherwise use the default, which is the average
+                # fiber length of this connectome
+                else:
+                    thisCentroid = centroid_for_tracks(self.tracks_for_regions(u,v))
+
+                try:
+                    centroids[u][v] = thisCentroid
+                except KeyError:
+                    centroids[u] = dict()
+                    centroids[u][v] = thisCentroid
+        return centroids
+
     @property
     def fibers(self):
         try:
@@ -136,23 +193,26 @@ class TNDtkConnectome(TNConnectome):
 
     @property
     def filtered_fibers(self):
-        if self.fibers.fibers is not None:
-            fiber_ctx = 0
-            filtered_fiber_ctx = 0
-            filtered_fibers_indices = self.network.graph['filtered_fibers_indices']
-            filtered_fiber_count = len(filtered_fibers_indices)
-            for fiber in self.fibers.fibers:
-                # TODO: fix this wierd offset after I fix in generate
-                # network method... indexing should start at zero, but
-                # for some odd reason I started at 1 (remember to
-                # confront past-self about this!)
-                if fiber_ctx + 1 == filtered_fibers_indices[filtered_fiber_ctx]:
-                    if filtered_fiber_ctx < filtered_fiber_count - 1 - 1:
-                        filtered_fiber_ctx += 1
-                        yield fiber
-                    else:
-                        break
-                fiber_ctx += 1
+        for u,v,data in self.network.edges_iter(data=True):
+            for fiber in data['fibers']:
+                yield fiber
+        # if self.fibers.fibers is not None:
+        #     fiber_ctx = 0
+        #     filtered_fiber_ctx = 0
+        #     filtered_fibers_indices = self.network.graph['filtered_fibers_indices']
+        #     filtered_fiber_count = len(filtered_fibers_indices)
+        #     for fiber in self.fibers.fibers:
+        #         # TODO: fix this wierd offset after I fix in generate
+        #         # network method... indexing should start at zero, but
+        #         # for some odd reason I started at 1 (remember to
+        #         # confront past-self about this!)
+        #         if fiber_ctx + 1 == filtered_fibers_indices[filtered_fiber_ctx]:
+        #             if filtered_fiber_ctx < filtered_fiber_count - 1 - 1:
+        #                 filtered_fiber_ctx += 1
+        #                 yield fiber
+        #             else:
+        #                 break
+        #         fiber_ctx += 1
             
     def generate_network(self, overwrite=False, min_length=20, max_length=300 ):
         """Generate network. Will not overwrite existing network
@@ -186,13 +246,16 @@ class TNDtkConnectome(TNConnectome):
                         try:
                             self.network[i_value][j_value]['fiber_count'] += 1
                             self.network[i_value][j_value]['fiber_lengths'].append(len_fiber)
-                            self.network.graph['filtered_fibers_indices'].append(fiber_counter)
+                            self.network[i_value][j_value]['fibers'].append(fiber)
+                            
                         except KeyError:
                             self.network.add_edge(i_value, j_value)
                             self.network[i_value][j_value]['fiber_count'] = 1
                             self.network[i_value][j_value]['fiber_lengths'] = []
                             self.network[i_value][j_value]['fiber_lengths'].append(len_fiber)
-                            self.network.graph['filtered_fibers_indices'].append(fiber_counter)
+                            self.network[i_value][j_value]['fibers'] = []
+                            self.network[i_value][j_value]['fibers'].append(fiber)
+
             except IndexError:
                 print "i: %s, j: %s" % (i,j)
     @property
@@ -262,6 +325,14 @@ class TNDtkConnectome(TNConnectome):
             self._scalars = dict()
             return self._scalars
     
+    def tracks_for_regions(self, u, v):
+        """Return a list of fibers for a given u,v pair. If no fibers
+        exist for this pair, return an empty list"""
+        try:
+            return self.network[u][v]['fibers']
+        except:
+            return []
+
     @property
     def wm_image(self):
         try:

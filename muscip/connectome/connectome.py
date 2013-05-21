@@ -6,7 +6,7 @@ __MANIFEST_FILENAME__ = 'manifest.pickle'
 __MODIFICATIONS_FILENAME__ = 'modifications.pickle'
 __NETWORK_FILENAME__ = 'graph.gpickle'
 __ROI_IMAGE_FILENAME__ = 'roi.nii.gz'
-__VERSION__ = 2.0
+__VERSION__ = 3.0
 
 class TNConnectome(object):
     """Connectome as defined by me!"""

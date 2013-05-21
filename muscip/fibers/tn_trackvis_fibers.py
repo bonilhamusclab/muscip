@@ -1,5 +1,5 @@
 from nibabel import trackvis
-from .fibers import TNFibers
+from .fibers import TNFibers, fiber_length
 
 __FORMAT__ = 'trackvis'
 
@@ -91,6 +91,28 @@ class TNTrackvisFibers(TNFibers):
         }
         
 ################################################################################
+
+def centroid_for_tracks(tracks, length_factor=None, point_factor=2.0):
+    """Use the Quick Bundle algorithm to generate a centroid for a
+    given group of tracks."""
+    import dipy.segment.quickbundles as qb
+    import numpy
+    # if average length is none, then we need to calculate average
+    # length from the fibers themselves so that we may multiply by our
+    # point factor
+    if length_factor is None:
+        lengths = []
+        for track in tracks:
+            lengths.append(fiber_length(track))
+        length_factor = numpy.mean(lengths)
+    # use quick bundle with an outrageously large distance threshold
+    # so that we are only returning one track cluster... this is not
+    # how this tool is meant to be used, but for our simple purpose, i
+    # believe this is what we need... also we will make the number of
+    # points be a function of the track length
+    Bundle = qb.QuickBundles(tracks, dist_thr=1000000,
+                             pts=int(length_factor * point_factor))
+    return Bundle.virtuals()[0]
 
 def read_trackvis(filename):
     data, hdr = trackvis.read(filename, as_generator=True)
