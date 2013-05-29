@@ -315,10 +315,7 @@ class TNConnectome(object):
         already exist, so as to protect against version corruption.
 
         """
-        if self.version is None:
-            self.manifest['VERSION'] = new_version
-        else:
-            raise Exception("Cannot overwrite previous version.")
+        self.manifest['VERSION'] = new_version
 
     @property
     def vox_dims(self):
