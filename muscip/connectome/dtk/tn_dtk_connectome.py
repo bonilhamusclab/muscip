@@ -35,18 +35,13 @@ class TNDtkConnectome(TNConnectome):
             self.min_fiber_length = min_fiber_length
         if float(self.version) < 3.0:
             print "Upgrading connectome to 3.0... re-generating network"
-            self.generate_network(overwrite=True,
-                                  min_length=self.min_fiber_length,
-                                  max_length=self.max_fiber_length)
+            self.generate_network(overwrite=True)
             self.version = 3.0
 
-    def add_scalar(self, img, name, aff=None):
+    def add_scalar(self, img, name):
         # load inmage
         import nibabel
         scalar_data = nibabel.load(img).get_data()
-        # if affine is not provided, use inverse of fibers-to-roi-affine
-        if aff is None:
-            aff = numpy.linalg.inv(self.fibers_to_roi_affine)
         # create a function to map fiber indices to voxel value in
         # corresponding image
         def value_at_point(img_data, pt):
@@ -56,9 +51,8 @@ class TNDtkConnectome(TNConnectome):
         # for every edge calculate the average scalar value for all
         # fibers
         for fiber in self.filtered_fibers:
-            fiber = transform_fiber_by_aff(fiber, aff)
-            u = value_at_point(roi_data, fiber[0])
-            v = value_at_point(roi_data, fiber[-1])
+            u = int(value_at_point(roi_data, fiber[0]))
+            v = int(value_at_point(roi_data, fiber[-1]))
             inside_accum = 0.0
             for pt in fiber:
                 inside_accum += value_at_point(scalar_data, pt)
@@ -214,7 +208,7 @@ class TNDtkConnectome(TNConnectome):
         #                 break
         #         fiber_ctx += 1
             
-    def generate_network(self, overwrite=False, min_length=20, max_length=300 ):
+    def generate_network(self, overwrite=False):
         """Generate network. Will not overwrite existing network
         unless overwrite is set to True.
         """
@@ -235,9 +229,9 @@ class TNDtkConnectome(TNConnectome):
                 else:
                     print "...%s fibers have been processed" % fiber_counter
             # fiber = transform_fiber_by_aff(fiber, self.fibers_to_roi_affine)
-            len_fiber = fiber_length(fiber)
+            len_fiber = fiber_length(fiber, self.fibers.voxel_size)
             try:
-                if len_fiber >= min_length and len_fiber <= max_length:
+                if len_fiber >= self.min_fiber_length and len_fiber <= self.max_fiber_length:
                     i = tuple(fiber[0])
                     j = tuple(fiber[-1])
                     i_value = int(roi_data[i])
