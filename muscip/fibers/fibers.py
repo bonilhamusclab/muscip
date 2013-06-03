@@ -64,9 +64,9 @@ def fiber_length(fiber, vox_dims=[1.,1.,1.]):
         start = vertices[idx]
         end = vertices[idx+1]
         from math import sqrt
-        distance = sqrt( ( (end[0]-start[0]) / vox_dims[0])**2 + \
-                         ( (end[1]-start[1]) / vox_dims[1])**2 + \
-                         ( (end[2]-start[2]) / vox_dims[2])**2 )
+        distance = sqrt( ( (end[0]-start[0]) * vox_dims[0])**2 + \
+                         ( (end[1]-start[1]) * vox_dims[1])**2 + \
+                         ( (end[2]-start[2]) * vox_dims[2])**2 )
         segments.append(distance)
         idx += 1
     from math import fsum
