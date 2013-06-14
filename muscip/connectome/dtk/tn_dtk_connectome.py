@@ -71,7 +71,7 @@ class TNDtkConnectome(TNConnectome):
             self.network[u][v][name] = self.network[u][v][name] / \
                                        float(self.network[u][v]['fiber_count'])
         
-    def centroids_for_region_pairs(self, min_numfib=10, group_connectome=None):
+    def centroids_for_region_pairs(self, min_numfib=10, avg_length_dict=None, group_connectome=None):
         """Return a dictionary where streamlines between region a and
         region b are represented as a single list of points
         representing the centroid.
@@ -83,6 +83,15 @@ class TNDtkConnectome(TNConnectome):
                      if the fiber count for said pair is greater than
                      or equal than this number.
 
+        avg_lengtgh_dict - A dictionary containing the average length
+                           for all possible pairs (u,v). This may be
+                           useful when one wants to constrain the
+                           centroids for multiple subjects to the same
+                           number of points (which is based on
+                           length). If both an avg_length and
+                           group_connectome is provided, the
+                           avg_length will take precedence.
+
         group_connectome - if defined, the average length will be
                            taken from this connectome rather than the
                            one we are currently operating upon. this
@@ -91,7 +100,9 @@ class TNDtkConnectome(TNConnectome):
                            individuals to have the same number of
                            points, and we do so by feeding our
                            centroid generating function the same
-                           length factor.
+                           length factor. If both an avg_length and
+                           group_connectome is provided, the
+                           avg_length will take precedence.
 
         """
 
@@ -103,10 +114,19 @@ class TNDtkConnectome(TNConnectome):
         for u,v,data in self.network.edges_iter(data=True):
             print "Generating centroid for regions [ %s -- %s ]" % (u,v)
             if data['fiber_count'] >= min_numfib:
-                # if a group connectome was provided, use the average
-                # of fibers for u,v as the length factor for the
-                # centroid generation
-                if group_connectome is not None:
+                # if an avg_length dictionary was provided, use avg
+                # length defined for u,v
+                if avg_length_dict is not None:
+                    if u in avg_length_dict.keys():
+                        avg_length = avg_length_dict[u][v]
+                    else:
+                        avg_length = avg_length_dict[v][u]
+                    thisCentroid = centroid_for_tracks(self.tracks_for_regions(u,v),
+                                                       length_factor=avg_length)
+                # else, if a group connectome was provided, use the
+                # average of fibers for u,v as the length factor for
+                # the centroid generation
+                elif group_connectome is not None:
                     avg_length = numpy.mean(group_connectome.network[u][v]['fiber_lengths'])
                     thisCentroid = centroid_for_tracks(self.tracks_for_regions(u,v),
                                                        length_factor=avg_length)

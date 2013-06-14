@@ -73,10 +73,10 @@ def fiber_length(fiber, vox_dims=[1.,1.,1.]):
     return fsum(segments)
 
 def transform_fiber_by_aff(fiber, aff):
-    import numpy
+    import numpy as np
     xFiber = []
     for idx in fiber:
-        xIdx = numpy.dot(aff, numpy.append(idx , 1))[0:3]
+        xIdx = (np.asmatrix(aff) * np.asmatrix(idx).T).T[:,-1]
         xFiber.append(xIdx)
     return xFiber
     
