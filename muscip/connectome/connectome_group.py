@@ -72,7 +72,7 @@ class TNConnectomeGroup(object):
                          subnetwork_nodes=None):
         structure = dict()
         structure['data'] = list()
-        exclude_keys = ['streamlines', 'streamlines_length', 'fiber_lengths']
+        exclude_keys = ['streamlines', 'streamlines_length', 'fiber_lengths', 'fibers']
         if number_of_nodes is None:
             number_of_nodes = self.number_of_nodes
         for connectome in self.connectomes():
