@@ -387,7 +387,7 @@ class TNConnectome(object):
             except:
                 return None
     
-    def edge_observations_for_key(self, key, include_info=True, node_name_key=None):
+    def edge_list_for_key(self, key):
         """Return record for a given key in the form of a dictionary.
 
         Inputs::
@@ -395,40 +395,20 @@ class TNConnectome(object):
           key: key for which to export - key must contain no more than
                a single value for each edge
 
-          include_info: (Boolean) should export include info
-
-          node_name_key: if provided, will use information stored in
-                         the node key, to label edges, if not
-                         provided, will use node labels - edges will
-                         take on the form of nodeA-nodeB
-
         """
-        try:
-            if include_info:
-                try:
-                    from copy import copy
-                    data = self.clinical_info
-                except KeyError:
-                    print "No clinical info found for connectome."
-                    data = dict()                    
-                except Exception, e:
-                    print e
-            else:
-                data = dict()
-                # for every edge, get data and put in result
-            for a,b in self.edges_iter():
-                if node_name_key is not None:
-                    # get node names
-                    nodeA = self.node[a][node_name_key]
-                    nodeB = self.node[b][node_name_key]
-                else:
-                    nodeA = a
-                    nodeB = b
-                data["%s-%s" % (str(nodeA), str(nodeB))] = self[a][b][key]
-            return data
-        except Exception, e:
-            print e
-            return None
+        # create an empty list to hold all records
+        records = list()
+        # get values for every edge in this connectome...
+        for u,v,data in self.network.edges_iter(data=True):
+            record = dict()
+            record['u'] = u
+            record['v'] = v
+            record[key] = data[key]
+            # append this record to our collection
+            records.append(record)
+
+        # return found records
+        return records
 
     def matrix_for_key(self, key, force_symmetric=True,
                        binarize=False, number_of_nodes=None,

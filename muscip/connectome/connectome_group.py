@@ -65,6 +65,75 @@ class TNConnectomeGroup(object):
             from os.path import join
             yield con.read(join(self.subject_dir, subject, self.connectome_path))
 
+    def edge_list_for_key(self, key, outfile, clinical_info=False, sep=','):
+        """Create an edge list for connectomes for a given key and
+        output to a text file.
+
+        Input::
+
+          key - for which key do we want values?
+
+          outfile - write to this filepath
+
+          clinical_info - should each record contain all clinical
+                          info?
+
+          sep - charater to use as delimiter (defaults to comma)
+
+        Example::
+
+          aConnectomeGroup.edge_list_for_key('fiber_count', 'foo.csv')
+
+        """
+        # open outfile for writing
+        hOutfile = open(outfile, 'wb')
+
+        # if we are not writing clinical info, then the header should
+        # be "subject.id,u,v,<key>"
+        if not clinical_info:
+            hdr = "subject.id%su%sv%s%s" % (sep,sep,sep,key)
+        # otherwise, grab the first subject and get clinical
+        # info... we assume that all subjects have the same clinical
+        # info dictionary... if this is not true, then it may be best
+        # to run this method with the clinical_info=False option
+        else:
+            hdr = ""
+            C_exemplar = self.connectomes().next()
+            # add an entry in header for every key in the clinical
+            # info dictionary of the example connectome
+            clinical_info_keys = C_exemplar.clinical_info.keys()
+            for clinkey in clinical_info_keys:
+                hdr += (clinkey + sep)
+            # append our edge header stuff
+            hdr += "u%sv%s%s" % (sep,sep,key)
+
+        # write the header to the top of the outfile
+        hOutfile.write(hdr + "\n")
+
+        # for each connectome in group...
+        for con in self.connectomes():
+            # form a record prefix containing either only the subject
+            # id, or the complete clinical info dictionary depending
+            # on parameter
+            if clinical_info:
+                recordPrefix = ""
+                for clinkey in clinical_info_keys:
+                    recordPrefix += ( str(con.clinical_info[clinkey]) + sep)
+            else:
+                recordPrefix = (con.subject_id + sep)
+
+            # get edge list for key
+            edgeList = con.edge_list_for_key(key)
+            # for each record in edgeList...
+            for record in edgeList:
+                # append record prefix and write this record
+                thisRecord = recordPrefix + str(record['u']) + sep + \
+                    str(record['v']) + sep + str(record[key])
+                hOutfile.write(thisRecord + '\n')
+
+        # close up outfile
+        hOutfile.close()
+
     def export_to_matlab(self, filename,
                          fiber_lengths=False,
                          fiber_lengths_key='fiber_lengths',
