@@ -323,7 +323,8 @@ class TNConnectomeGroup(object):
                     print "No info found in csv file for: %s" % subject
                     continue
                 # apply new info
-                C.clinical_info = new_info
+                for key, value in new_info.iteritems():
+                    C.clinical_info[key] = value
                 # try to save connectome
                 try:
                     if new_filename:
