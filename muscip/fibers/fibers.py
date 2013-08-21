@@ -44,6 +44,11 @@ class TNFibers(object):
     def voxel_size(self):
         raise Exception("Method <voxel_size> is not implemented by \
                         subclass: %s" % type(self))
+
+    @property
+    def vox_to_ras(self):
+        raise Exception("Method <vox_to_ras> is not implemented by \
+                         subclass: %s" % type(self))
     
     def write(self, filename):
         raise Exception("Method <write> is not implemented by \
@@ -74,11 +79,16 @@ def fiber_length(fiber, vox_dims=[1.,1.,1.]):
 
 def transform_fiber_by_aff(fiber, aff):
     import numpy as np
+    if fiber.dtype == 'float64':
+        myDType = np.float64
+    else:
+        myDType = np.float32
     xFiber = []
-    for idx in fiber:
-        xIdx = (np.asmatrix(aff) * np.asmatrix(idx).T).T[:,-1]
-        xFiber.append(xIdx)
-    return xFiber
+    for point in fiber:
+        # point = point - shape / 2.0
+        point = np.dot(aff, np.concatenate((point,[1])))[:-1]
+        xFiber.append(point)
+    return np.asarray(xFiber, dtype=myDType)
     
 def sum_of_inverse_fiber_lengths(roi_img, endpoints, lengths):
     """For a given ROI atlas and set of fibers, return an adjacency

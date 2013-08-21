@@ -206,28 +206,20 @@ class TNDtkConnectome(TNConnectome):
             return None
 
     @property
-    def filtered_fibers(self):
+    def filtered_fibers(self, points_space='voxel'):
+        """Return fibers counted in the connectome in one of three
+        spaces: (voxel, voxmm, rasmm) default: voxel"""
         for u,v,data in self.network.edges_iter(data=True):
             for fiber in data['fibers']:
-                yield fiber
-        # if self.fibers.fibers is not None:
-        #     fiber_ctx = 0
-        #     filtered_fiber_ctx = 0
-        #     filtered_fibers_indices = self.network.graph['filtered_fibers_indices']
-        #     filtered_fiber_count = len(filtered_fibers_indices)
-        #     for fiber in self.fibers.fibers:
-        #         # TODO: fix this wierd offset after I fix in generate
-        #         # network method... indexing should start at zero, but
-        #         # for some odd reason I started at 1 (remember to
-        #         # confront past-self about this!)
-        #         if fiber_ctx + 1 == filtered_fibers_indices[filtered_fiber_ctx]:
-        #             if filtered_fiber_ctx < filtered_fiber_count - 1 - 1:
-        #                 filtered_fiber_ctx += 1
-        #                 yield fiber
-        #             else:
-        #                 break
-        #         fiber_ctx += 1
-            
+                if points_space == 'voxel':
+                    yield fiber
+                elif points_space == 'voxmm':
+                    yield fiber * self.fibers.voxel_size
+                elif points_space == 'rasmm':
+                    yield transform_fiber_by_aff(fiber, self.fibers.vox_to_ras)
+                else:
+                    raise Exception("%s is not a valid points space")
+
     def generate_network(self, overwrite=False):
         """Generate network. Will not overwrite existing network
         unless overwrite is set to True.

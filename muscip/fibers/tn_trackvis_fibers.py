@@ -50,6 +50,13 @@ class TNTrackvisFibers(TNFibers):
             return self.hdr['voxel_size']
         except:
             return None
+
+    @property
+    def vox_to_ras(self):
+        try:
+            return self.hdr['vox_to_ras']
+        except:
+            return None
         
     def write(self, filename, **kwargs):
         endianness = kwargs.get('endianness', None)
