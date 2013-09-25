@@ -45,9 +45,11 @@ class TNDtkConnectome(TNConnectome):
         # create a function to map fiber indices to voxel value in
         # corresponding image
         def value_at_point(img_data, pt):
-            return img_data[tuple(pt)]
-        # get roi data
-        roi_data = self.roi_image.get_data()
+            return img_data[tuple(pt-0.5)]   # subtract 0.5 because of
+                                             # trackvis offset
+
+        roi_data = self.roi_image.get_data() # get roi data
+
         # for every edge calculate the average scalar value for all
         # fibers
         for fiber in self.filtered_fibers:
@@ -244,10 +246,16 @@ class TNDtkConnectome(TNConnectome):
             len_fiber = fiber_length(fiber, self.fibers.voxel_size)
             try:
                 if len_fiber >= self.min_fiber_length and len_fiber <= self.max_fiber_length:
-                    i = tuple(fiber[0])
-                    j = tuple(fiber[-1])
-                    i_value = int(roi_data[i])
-                    j_value = int(roi_data[j])
+                    i = tuple(fiber[0]-0.5)    # index of first point
+                                               # of fiber - 0.5
+                                               # because of trackvis
+                                               # coordintates
+                    j = tuple(fiber[-1]-0.5)   # index of last point
+                                               # of fiber - 0.5
+                                               # because of trackvis
+                                               # coordinates
+                    i_value = int(roi_data[i]) # get label under i
+                    j_value = int(roi_data[j]) # get label under j
                     if i_value != 0 and j_value !=0 and i_value != j_value:
                         try:
                             self.network[i_value][j_value]['fiber_count'] += 1
