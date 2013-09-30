@@ -11,6 +11,10 @@ from muscip import info
 packages = ["muscip",
             "muscip.atlas",
             "muscip.atlas.freesurfer",
+            "muscip.connectome",
+            "muscip.connectome.dtk",
+            "muscip.connectome.probtrackx",
+            "muscip.fibers",
             "muscip.interfaces",
             "muscip.workflows",
             "muscip.workflows.connectivity"]
