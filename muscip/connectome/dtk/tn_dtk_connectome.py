@@ -308,13 +308,13 @@ class TNDtkConnectome(TNConnectome):
         from ...images import surface_area_for_rois
         surface_area = surface_area_for_rois(self.roi_image, self.wm_image)
         # make sure surface areas are well formed (no zero values) by
-        # adding a small epsilon value to any zeros
-        epsilon = 0.000000001
+        # adding treating any zero value as a default value (1)
+        default_surface_area = 1
         for n in self.network.nodes():
             try:
                 surface_area[n]
             except KeyError:
-                surface_area[n] = epsilon
+                surface_area[n] = default_surface_area
         # for every edge in network...
         for i,j in self.network.edges_iter():
             # calculate hagmann density and add to data structure
