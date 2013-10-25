@@ -304,14 +304,6 @@ class TNDtkConnectome(TNConnectome):
         if self.wm_image is None or self.roi_image is None:
             print "Need to have defined ROI and WM before density can be extracted."
             return
-        # define method for summing the inverse lengths of all
-        # streamlines for a given edge
-        def inverse_sum(streamlines):
-            inverse_streamlines = []
-            for streamline in streamlines:
-                inverse_streamlines.append( 1.0 / streamline )
-            from math import fsum
-            return fsum(inverse_streamlines)
         # get surface areas for ROIs
         from ...images import surface_area_for_rois
         surface_area = surface_area_for_rois(self.roi_image, self.wm_image)
@@ -326,9 +318,9 @@ class TNDtkConnectome(TNConnectome):
         # for every edge in network...
         for i,j in self.network.edges_iter():
             # calculate hagmann density and add to data structure
-            hd = ((2.0 / (surface_area[i] + surface_area[j])) * \
-                  inverse_sum(self.network[i][j]['fiber_lengths']))
-            self.network[i][j]['hagmann_density'] = hd
+            combined_surface_area = 2. / surface_area[i] + surface_area[j]
+            sum_of_inverse_lengths = ( 1. / numpy.asarray(self.network[i][j]['fiber_lengths']) ).sum()
+            self.network[i][j]['hagmann_density'] = combined_surface_area * sum_of_inverse_lengths
                 
     @property
     def scalars(self):
