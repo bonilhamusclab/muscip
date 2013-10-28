@@ -311,9 +311,9 @@ class TNDtkConnectome(TNConnectome):
         # for every edge in network...
         for i,j in self.network.edges_iter():
             # calculate hagmann density and add to data structure
-            combined_surface_area = 2. / surface_area[i] + surface_area[j]
-            sum_of_inverse_lengths = ( 1. / numpy.asarray(self.network[i][j]['fiber_lengths']) ).sum()
-            self.network[i][j]['hagmann_density'] = combined_surface_area * sum_of_inverse_lengths
+            combined_surface_area = surface_area[i] + surface_area[j]
+            inverse_lengths = 1. / numpy.asarray(self.network[i][j]['fiber_lengths'])
+            self.network[i][j]['hagmann_density'] = ( 2. / combined_surface_area ) * inverse_lengths.sum()
                 
     @property
     def scalars(self):
