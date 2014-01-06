@@ -737,3 +737,13 @@ def surface_area_for_rois(roiImage, maskImage):
             else:
                 result[value] += 1
     return result    
+
+def voxel_count_by_region(roi_image, low=1, high=None):
+    """Given an roi image, return a dictionary that has region labels
+    for keys and voxel counts for values."""
+    if high is None:
+        high = roi_image.max()
+    result = dict()
+    for i in range(low, high+1):
+        result[i] = len(np.where(roi_image==i)[0])
+    return result

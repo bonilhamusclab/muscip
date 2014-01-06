@@ -139,31 +139,27 @@ class TNProbtrackxConnectome(TNConnectome):
                 # and add fiber count to edge
                 self._add_edge_value_for_key(seed,target,'fiber_count',fiber_count)
             
-    def populate_density(self):
-        """Add an entry for density for each edge. TODO: add complete
-        description and reference. This method requires the connectome
-        to have both roi and wm image defined."""
-        # check that both wm and roi are defined
-        if self.wm_image is None or self.roi_image is None:
-            print "Need to have defined ROI and WM before density can be extracted."
+    def populate_density(self, seeds_per_voxel=5000):
+        """Add an entry for density for each edge. We define density
+        as the sum of all voxel values within the region divided by
+        the count of voxels in the seed region * the number of seeds
+        per voxel (by default probtrackx uses 5000) + the number of
+        voxels in the target region.
+
+        """
+        # check that roi is defined
+        if self.roi_image is None:
+            print "Need to have defined ROI before density can be extracted."
             return
-        # get surface areas for ROIs
-        from ...images import surface_area_for_rois
-        surface_area = surface_area_for_rois(self.roi_image, self.wm_image)
-        # make sure surface areas are well formed (no zero values) by
-        # adding a small epsilon value to any zeros
-        epsilon = 0.000000001
-        for n in self.network.nodes():
-            try:
-                surface_area[n]
-            except KeyError:
-                surface_area[n] = epsilon
-        # for every edge in network...
-        for i,j in self.network.edges_iter():
-            # calculate hagmann density and add to data structure
-            density = self.network[i][j]['fiber_count'] / \
-                float( surface_area[i] + surface_area[j] )
-            self.network[i][j]['density'] = density
+        # get voxel counts for rois
+        from ...images import voxel_count_by_region
+        voxel_count = voxel_count_by_region(self.roi_image.get_data())
+        for u,v,data in self.network.edges_iter(data=True):
+            seed_voxels = voxel_count[u]
+            target_voxels = voxel_count[v]
+            volume = seed_voxels * seeds_per_voxel + target_voxels
+            if volume < 1: volume = 1.0
+            data['density'] = data['fiber_count'] / float(volume)
 
     def write(self, filename=None):
         """Write connectome to the given filename, do not need to
