@@ -70,6 +70,7 @@ def _convert_mgz_to_niigz_and_load(filepath):
     nibabel
 
     """
+    import os
     import os.path as op
     import subprocess
     import tempfile
@@ -78,7 +79,10 @@ def _convert_mgz_to_niigz_and_load(filepath):
     tmpfile = op.join(tmpdir, out_filename)
     print "IN: %s\tOUT: %s" % (filepath, tmpfile)
     try:
-        subprocess.check_call(["mri_convert", filepath, tmpfile])
+        devnull = open('/dev/null', 'w')
+        subprocess.check_call(["mri_convert", filepath, tmpfile],
+                              stdout=devnull, stderr=devnull)
+        devnull.close()
         tmpimg = nibabel.load(tmpfile)
         return nibabel.nifti1.Nifti1Image(tmpimg.get_data(),
                                           tmpimg.get_affine(),
@@ -164,8 +168,11 @@ def _reorient_fs_to_orig(input_img, freesurfer_dir):
     tmp_out = op.join(tmpdir, 'outfile.nii.gz')
     try:
         nibabel.save(input_img, tmp_in)
+        devnull = open('/dev/null', 'w')
         subprocess.check_call(["mri_convert", "-rl", reference, "-rt",
-                               "nearest", tmp_in, "-nc", tmp_out])
+                               "nearest", tmp_in, "-nc", tmp_out],
+                              stdout=devnull, stderr=devnull)
+        devnull.close()
         tmp_img = nibabel.load(tmp_out)
         return nibabel.nifti1.Nifti1Image(tmp_img.get_data(),
                                           tmp_img.get_affine(),
