@@ -118,7 +118,7 @@ class TNProbtrackxConnectome(TNConnectome):
         # else, we are generating network from fdt and roi images...
         print("...loading ROI and Fiber Distribution images")
         roi_data = self.roi_image.get_data()
-        rois = numpy.unique(roi_data[numpy.where(roi_data != 0)])
+        rois = numpy.unique(roi_data[roi_data != 0])
         num_rois = rois.size
         print("...%s number of regions found in atlas" % num_rois)
         seeds = numpy.arange(0,self.fdt_image.shape[-1])
@@ -135,7 +135,7 @@ class TNProbtrackxConnectome(TNConnectome):
                     continue # we will not consider self-loops
                 # else
                 # get fiber count
-                fiber_count = fdt_volume[numpy.where(roi_data == target)].sum()
+                fiber_count = fdt_volume[roi_data == target].sum()
                 # and add fiber count to edge
                 self._add_edge_value_for_key(seed,target,'fiber_count',fiber_count)
             
