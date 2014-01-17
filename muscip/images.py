@@ -222,9 +222,8 @@ class TNImage(object):
             return fileobj
             
         dtype = self._base.get_data_dtype()
-        s = self._base.get_header().get_data_shape()
-        shape = (s[0], s[1], s[2])
-        bytes_per_volume = np.prod(shape)
+        shape = self._base.get_header().get_data_shape()[:-1]
+        bytes_per_volume = np.prod(shape) * dtype.itemsize
         offset = self._base.get_header().get_data_offset() + (volume_idx * bytes_per_volume)
         data = array_from_file(shape, dtype, get_fileobj(self._base), offset)
         return data
