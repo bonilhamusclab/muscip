@@ -558,35 +558,41 @@ def neighbors_with_value(img, voxel, value):
     if isinstance(img, np.ndarray):
         data = img
     results = list()
-    search_space = [-1,0,1]
     me = tuple(voxel)
     x0 = voxel[0]
     y0 = voxel[1]
     z0 = voxel[2]
-    for dx in search_space:
-        for dy in search_space:
-            for dz in search_space:
-                test_idx = tuple([x0+dx, y0+dy, z0+dz])
-                # if test_idx is equal to original, let's move on to
-                # the next
-                if test_idx == me:
-                    continue
-                # if any of our xyz coordinates (for test idx) are
-                # negative, let's move on to the next (this would mean
-                # we are wrapping around a dimension, like pac-man
-                # when he goes through one side of the screen and ends
-                # up on the opposite)
-                if -1 in test_idx:
-                    continue
-                # if we've made it here we are ready to test for the
-                # target value for this particular voxel
-                try: # use try to handle indexing errors (our algo
-                     # will search beyond the max index for edge
-                     # cases)
-                    if data[test_idx] == value:
-                        results.append(test_idx)
-                except:
-                    pass # nothing to do, this is normal for edge cases
+    
+    def test_voxel(voxel):
+        test_idx = voxel
+        # if test_idx is equal to original, let’s move on to
+        # the next
+        if test_idx == me:
+            return
+        # if any of our xyz coordinates (for test idx) are
+        # negative, let’s move on to the next (this would mean
+        # we are wrapping around a dimension, like pac-man
+        # when he goes through one side of the screen and ends
+        # up on the opposite)
+        if -1 in test_idx:
+            return
+        # if we’ve made it here we are ready to test for the
+        # target value for this particular voxel
+        try: # use try to handle indexing errors (our algo
+            # will search beyond the max index for edge
+            # cases)
+            if data[test_idx] == value:
+                results.append(test_idx)
+        except:
+            pass # nothing to do, this is normal for edge cases
+
+    test_voxel(tuple([x0-1, y0, z0]))
+    test_voxel(tuple([x0+1, y0, z0]))
+    test_voxel(tuple([x0, y0-1, z0]))
+    test_voxel(tuple([x0, y0+1, z0]))
+    test_voxel(tuple([x0, y0, z0-1]))
+    test_voxel(tuple([x0, y0, z0+1]))
+
     return results
 
 def parcellate_mask(mask_img, number_of_parcels, basename=None, outdir=None):
